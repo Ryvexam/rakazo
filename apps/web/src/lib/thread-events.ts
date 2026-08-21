@@ -124,6 +124,22 @@ export function reduceThreadSnapshot(
   return prev;
 }
 
+export function userHoldsComputerControl(
+  computer: Pick<ComputerStatus, "controlHolder" | "controlBotId"> | null | undefined,
+  botId: string | undefined,
+): boolean {
+  return Boolean(botId && computer?.controlHolder === "user" && computer.controlBotId === botId);
+}
+
+export function computerPanelAutoBoot(
+  state: ComputerStatus["state"] | undefined,
+  screenUrl?: string | null,
+): "boot" | "recover-screen" | "wait" {
+  if (state === "booting" || state === "suspended") return "wait";
+  if (state === "running") return screenUrl ? "wait" : "recover-screen";
+  return "boot";
+}
+
 export function reduceComputerStatus(
   prev: ComputerStatus | null,
   event: ProductEvent,

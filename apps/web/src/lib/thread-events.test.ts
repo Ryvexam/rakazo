@@ -6,11 +6,13 @@ import type {
 } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
+  computerPanelAutoBoot,
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
   prependThreadMessagePage,
   reduceComputerStatus,
   reduceThreadSnapshot,
+  userHoldsComputerControl,
 } from "./thread-events.js";
 
 describe("thread event reduction", () => {
@@ -318,6 +320,30 @@ describe("computer event reduction", () => {
       controlHolder: "bot",
       controlBotId: null,
     });
+  });
+
+  it("fills in controlBotId when a grant arrives after controlHolder is already user", () => {
+    const granted = reduceComputerStatus(
+      computer({ state: "running", controlHolder: "user", controlBotId: null }),
+      event({ type: "computer.takeover.granted", payload: {} }),
+    );
+    expect(granted).toMatchObject({
+      state: "running",
+      controlHolder: "user",
+      controlBotId: "bot-1",
+    });
+    expect(userHoldsComputerControl(granted, "bot-1")).toBe(true);
+    expect(userHoldsComputerControl(granted, "bot-2")).toBe(false);
+  });
+
+  it("auto-boots stopped computers and recovers a running screen that has no URL", () => {
+    expect(computerPanelAutoBoot("stopped")).toBe("boot");
+    expect(computerPanelAutoBoot("error")).toBe("boot");
+    expect(computerPanelAutoBoot(undefined)).toBe("boot");
+    expect(computerPanelAutoBoot("running", "https://screen.example")).toBe("wait");
+    expect(computerPanelAutoBoot("running", null)).toBe("recover-screen");
+    expect(computerPanelAutoBoot("booting")).toBe("wait");
+    expect(computerPanelAutoBoot("suspended")).toBe("wait");
   });
 });
 
