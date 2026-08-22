@@ -276,6 +276,14 @@ describeJourneys("required product journeys", () => {
         trigger: "user",
       },
     });
+    await prisma.thread.update({
+      where: { id: thread.id },
+      data: {
+        historyCompactedUpToSeq: 0,
+        historyCompactionSummary: "summary that must be invalidated",
+        historyCompactionGeneration: 3,
+      },
+    });
 
     await rpc(app, cookie, "threads/clear", { botId: bot.id });
 
@@ -290,6 +298,8 @@ describeJourneys("required product journeys", () => {
     // recall cannot treat the fresh conversation as having uncompacted history.
     const clearedThread = await prisma.thread.findUniqueOrThrow({ where: { id: thread.id } });
     expect(clearedThread.historyCompactedUpToSeq).toBe(clearedThread.nextMessageSeq - 1);
+    expect(clearedThread.historyCompactionSummary).toBeNull();
+    expect(clearedThread.historyCompactionGeneration).toBe(4);
     expect(await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
       status: "cancelled",
     });
