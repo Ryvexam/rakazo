@@ -413,7 +413,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           deps.prisma.task.findUniqueOrThrow({ where: { id: run.taskId } }),
           deps.prisma.connection.findMany({
             where: { userId: run.userId, workspaceId: run.workspaceId },
-            select: { id: true, provider: true, displayName: true, status: true },
+            select: {
+              id: true,
+              connectorId: true,
+              provider: true,
+              providerRef: true,
+              displayName: true,
+              status: true,
+            },
           }),
           findDefaultModelCredential(deps.prisma, run),
           deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
@@ -424,20 +431,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
         ]);
         runAbortController = new AbortController();
         if (!leaseValid) runAbortController.abort();
+        const composioRows = storedConnections.filter(
+          (connection) => connection.connectorId === "composio",
+        );
         let liveSlugs: string[] = [];
-        if (needsLivePluginSync(storedConnections)) {
+        if (needsLivePluginSync(composioRows)) {
           const listing = await loadLivePluginSlugs(deps.listConnectedPluginSlugs, run.userId);
           if (listing.ok) {
             liveSlugs = listing.slugs;
-            await persistLivePluginConnections(
-              deps.prisma,
-              run,
-              storedConnections,
-              listing.slugs,
-            ).catch(() => undefined);
+            await persistLivePluginConnections(deps.prisma, run, composioRows, listing.slugs).catch(
+              () => undefined,
+            );
           }
         }
-        const connectedPlugins = mergeConnectedPlugins(storedConnections, liveSlugs);
+        const connectedComposio = mergeConnectedPlugins(composioRows, liveSlugs);
+        const activeKeys = new Set(
+          connectedComposio.map((connection) => `composio:${connection.provider}`),
+        );
+        const connectedPlugins = storedConnections.filter(
+          (connection) =>
+            connection.status === "connected" ||
+            activeKeys.has(`${connection.connectorId}:${connection.provider}`),
+        );
         const context = {
           operationId: runId,
           traceId: runId,
@@ -447,7 +462,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           runId,
           screenLeaseId: screenLeaseIdForRun(computerLease, runId, fence),
           signal: runAbortController.signal,
-          connectedProviders: connectedPlugins.map((row) => row.provider),
+          connectedConnections: connectedPlugins.map((row) => ({
+            id: row.id,
+            connectorId: row.connectorId,
+            externalId: row.provider,
+            displayName: row.displayName,
+            providerRef: row.providerRef ?? undefined,
+          })),
+          connectedProviders: connectedComposio.map((row) => row.provider),
         };
         const memoryScope = configuredMemory
           ? effectiveMemoryScope(bot.memoryScope, configuredMemory.defaultScope)
@@ -563,12 +585,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : builtinAgentTools.filter((tool) => !GRAPHICAL_AGENT_TOOLS.has(tool.name))
         ).filter((tool) => thread.groupId || tool.name !== "handoff_to_bot");
         const builtins = selectMemoryTools(availableBuiltins, semanticMemoryEnabled);
-        const tools = [
-          ...builtins,
-          ...discovered.filter(
-            (tool) => !builtinAgentTools.some((builtin) => builtin.name === tool.name),
-          ),
-        ];
+        const exposedConnectorTools = discovered.filter(
+          (tool) => !builtinAgentTools.some((builtin) => builtin.name === tool.name),
+        );
+        const connectorRoutes = new Map(
+          exposedConnectorTools
+            .filter((tool) => tool.route)
+            .map((tool) => [tool.name, tool.route!] as const),
+        );
+        const readOnlyConnectorTools = new Set(
+          exposedConnectorTools.filter((tool) => tool.readOnly).map((tool) => tool.name),
+        );
+        const tools = [...builtins, ...exposedConnectorTools];
         const computerInstruction = graphical
           ? "You have a persistent computer. Use computer_observe and computer_act for its visible desktop, including browsers and installed applications. Use open_path and launch_app to open graphical files, URLs, and applications. Use the file tools and shell for precise filesystem and terminal work. On a Team Computer you have your own screen; other Team bots may run at the same time on theirs. Another user may interact with your screen while you run, so re-observe when it may have changed."
           : "You have a persistent sandbox filesystem and shell. This backend does not provide model-visible graphical control, so use the file tools and shell.";
@@ -640,9 +668,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           args: Record<string, unknown>,
           executionId: string,
         ) => {
-          const applied = READ_ONLY_AGENT_TOOLS.has(name)
-            ? undefined
-            : await recordEffect(deps, run, name, executionId, args);
+          const applied =
+            READ_ONLY_AGENT_TOOLS.has(name) || readOnlyConnectorTools.has(name)
+              ? undefined
+              : await recordEffect(deps, run, name, executionId, args);
           if (applied?.duplicate) {
             if (applied.effect.status === "completed") {
               return applied.effect.result ?? { duplicate: true };
@@ -993,7 +1022,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (deps.connector) {
             let result: unknown = { error: `unknown tool ${name}` };
             for await (const event of deps.connector.execute(
-              { tool: name, args, executionId },
+              { tool: name, args, executionId, route: connectorRoutes.get(name) },
               context,
             )) {
               if (event.type === "result") {
@@ -1019,7 +1048,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
         const pluginLine =
           connectedPlugins.length > 0
-            ? `Connected plugins: ${connectedPlugins.map((row) => `${row.displayName} (${row.provider})`).join(", ")}. Use those plugin tools when the user asks about those apps.`
+            ? `Connected plugins: ${connectedPlugins.map((row) => `${row.displayName} (${row.connectorId}:${row.provider})`).join(", ")}. Use those plugin tools when the user asks about those apps.`
             : "No plugins are connected yet.";
         const taughtSkillIndex = savedSkills.slice(0, 20);
         const taughtSkillsLine =

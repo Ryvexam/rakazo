@@ -510,6 +510,7 @@ model Connection {
   workspaceId   String
   workspace     Organization @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId        String
+  connectorId   String   @default("composio")
   provider      String
   displayName   String
   status        String
@@ -519,7 +520,7 @@ model Connection {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@index([workspaceId, userId])
+  @@index([workspaceId, userId, connectorId])
   @@map("connections")
 }
 
@@ -533,6 +534,7 @@ model CapabilityInstall {
   source      String
   version     String?
   digest      String?
+  secretId    String?
   config      Json     @default("{}")
   createdAt   DateTime @default(now())
 

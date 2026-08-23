@@ -15,11 +15,15 @@ import {
   GraphileJobPublisher,
   GraphileJobWorkerHost,
   InMemoryJobQueue,
+  InstalledConnectorProvider,
   isComposioEnabled,
+  isPipedreamEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
   PiAgentRuntime,
+  PipedreamConnector,
   PostgresRealtimeFanout,
+  pipedreamConfigFromEnv,
   ScriptedAgentRuntime,
   WorkspaceMemoryProviderResolver,
 } from "@rakazo/adapters";
@@ -50,10 +54,23 @@ async function main() {
     dataDir,
     prisma,
   });
-  const stack = createConnectorStack(isComposioEnabled(process.env.COMPOSIO_API_KEY));
+  const secrets = new EncryptedSecretStore(resolveEncryptionKey(process.env));
+  const pipedreamConfig = pipedreamConfigFromEnv({
+    pipedreamClientId: process.env.PIPEDREAM_CLIENT_ID,
+    pipedreamClientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
+    pipedreamProjectId: process.env.PIPEDREAM_PROJECT_ID,
+    pipedreamEnvironment: process.env.PIPEDREAM_ENVIRONMENT,
+    encryptionKey: resolveEncryptionKey(process.env),
+  });
+  const pipedream = isPipedreamEnabled(pipedreamConfig)
+    ? new PipedreamConnector(pipedreamConfig)
+    : undefined;
+  const stack = createConnectorStack(isComposioEnabled(process.env.COMPOSIO_API_KEY), undefined, [
+    new InstalledConnectorProvider(prisma, secrets),
+    ...(pipedream ? [pipedream] : []),
+  ]);
   const connector = stack.destination;
   await connector.start();
-  const secrets = new EncryptedSecretStore(resolveEncryptionKey(process.env));
   const memoryProviders = new WorkspaceMemoryProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
