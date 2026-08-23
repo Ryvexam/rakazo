@@ -3,6 +3,7 @@ import type {
   Bot,
   BotSection,
   ComputerMode,
+  ComputerReleaseReason,
   ComputerStatus,
   Group,
   Me,
@@ -1216,10 +1217,10 @@ export function ShellPage() {
     setComputerOpen(true);
   }
 
-  async function releaseComputer() {
+  async function releaseComputer(reason?: ComputerReleaseReason) {
     if (!active) return;
     setComputerOpen(false);
-    await rpc.computer.release({ botId: active.id }).catch(() => undefined);
+    await rpc.computer.release({ botId: active.id, reason }).catch(() => undefined);
     await refreshThread(active.id);
   }
 
@@ -1757,14 +1758,10 @@ export function ShellPage() {
                           : computerLabel(computer?.mode, active.name)}
                   </span>
                   {hasControl ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void releaseComputer()}
-                    >
-                      Release
-                    </Button>
+                    <ComputerReleaseActions
+                      takeoverRequested={computer?.takeoverRequested ?? false}
+                      onRelease={releaseComputer}
+                    />
                   ) : (
                     <Button
                       type="button"
@@ -2219,14 +2216,10 @@ export function ShellPage() {
               {recordingSkill ? (
                 <TeachStopButton busy={teachBusy} onStop={stopTeaching} />
               ) : hasControl ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void releaseComputer()}
-                >
-                  Release
-                </Button>
+                <ComputerReleaseActions
+                  takeoverRequested={computer?.takeoverRequested ?? false}
+                  onRelease={releaseComputer}
+                />
               ) : (
                 <Button
                   type="button"
@@ -2676,6 +2669,32 @@ function applyThreadEvent(
   if (isComputerStatusEvent(event)) {
     setComputer((prev) => reduceComputerStatus(prev, event));
   }
+}
+
+function ComputerReleaseActions({
+  takeoverRequested,
+  onRelease,
+}: {
+  takeoverRequested: boolean;
+  onRelease: (reason?: ComputerReleaseReason) => Promise<void>;
+}) {
+  if (!takeoverRequested) {
+    return (
+      <Button type="button" variant="outline" size="sm" onClick={() => void onRelease()}>
+        Release
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <Button type="button" variant="outline" size="sm" onClick={() => void onRelease("skipped")}>
+        Skip
+      </Button>
+      <Button type="button" size="sm" onClick={() => void onRelease("done")}>
+        I’m done
+      </Button>
+    </div>
+  );
 }
 
 function ToolSteps({

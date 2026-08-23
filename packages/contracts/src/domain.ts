@@ -286,6 +286,7 @@ export const ComputerStatusSchema = z.object({
   state: z.enum(["stopped", "booting", "running", "suspended", "error"]),
   controlHolder: z.enum(["bot", "user", "none"]),
   controlBotId: Id.nullable(),
+  takeoverRequested: z.boolean(),
   screenAvailable: z.boolean(),
   screenWidth: z.number().int().positive(),
   screenHeight: z.number().int().positive(),
@@ -293,6 +294,9 @@ export const ComputerStatusSchema = z.object({
   busyBotName: z.string().nullable(),
 });
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
+
+export const ComputerReleaseReasonSchema = z.enum(["done", "skipped"]);
+export type ComputerReleaseReason = z.infer<typeof ComputerReleaseReasonSchema>;
 
 export const RunSchema = z.object({
   id: Id,

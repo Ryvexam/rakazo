@@ -103,6 +103,10 @@ describe("finalizeComputerControlRelease", () => {
           thread: { id: "thread-1" },
         }),
       },
+      run: {
+        findUnique: vi.fn().mockResolvedValue({ status: "waiting_takeover" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
       thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
       event: {
         create: vi.fn().mockResolvedValue({
@@ -124,13 +128,14 @@ describe("finalizeComputerControlRelease", () => {
           workspaceId: "workspace-1",
           computerId: "computer-1",
           botId: "bot-1",
+          runId: "run-1",
           leaseId: "lease-1",
           holder: "none",
           reason: "expired",
         },
         fanout,
       ),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ runId: "run-1" });
 
     expect(tx.computer.updateMany).toHaveBeenCalledWith({
       where: {
@@ -138,18 +143,30 @@ describe("finalizeComputerControlRelease", () => {
         workspaceId: "workspace-1",
         controlBotId: "bot-1",
         controlLeaseId: "lease-1",
+        controlRunId: "run-1",
       },
       data: {
         controlHolder: "none",
         controlLeaseId: null,
         controlLeaseExpiresAt: null,
         controlBotId: null,
+        controlRunId: null,
       },
+    });
+    expect(tx.run.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "run-1",
+        workspaceId: "workspace-1",
+        botId: "bot-1",
+        status: "waiting_takeover",
+      },
+      data: { status: "queued", checkpoint: "takeover-skipped" },
     });
     expect(tx.event.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           type: "computer.takeover.released",
+          runId: "run-1",
           payload: { holder: "none", leaseId: "lease-1", reason: "expired" },
         }),
       }),
@@ -172,11 +189,12 @@ describe("finalizeComputerControlRelease", () => {
         workspaceId: "workspace-1",
         computerId: "computer-1",
         botId: "deleted-bot",
+        runId: null,
         leaseId: "lease-1",
         holder: "none",
         reason: "expired",
       }),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ runId: null });
 
     expect(tx.computer.updateMany).toHaveBeenCalledOnce();
   });

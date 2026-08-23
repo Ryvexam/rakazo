@@ -10,6 +10,7 @@ import {
   BotSectionSchema,
   CapabilityInstallSchema,
   ComputerModeSchema,
+  ComputerReleaseReasonSchema,
   ComputerStatusSchema,
   ConnectionCatalogItemSchema,
   ConnectionSchema,
@@ -219,7 +220,14 @@ export const appContract = {
     boot: oc.input(botId).output(ComputerStatusSchema),
     stop: oc.input(botId).output(ComputerStatusSchema),
     takeover: oc.input(botId).output(z.object({ leaseId: Id, expiresAt: z.string() })),
-    release: oc.input(botId).output(z.object({ ok: z.literal(true) })),
+    release: oc
+      .input(
+        z.object({
+          botId: Id,
+          reason: ComputerReleaseReasonSchema.optional(),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true) })),
     input: oc
       .input(
         z.object({

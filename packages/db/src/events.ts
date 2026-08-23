@@ -29,7 +29,9 @@ export interface ThreadEvents {
   answerRunInput(input: AnswerRunInput): Promise<boolean>;
   append(input: AppendEventInput): Promise<ProductEvent>;
   clearThread(input: ClearThreadInput): Promise<ClearThreadResult>;
-  finalizeComputerControlRelease(input: FinalizeComputerControlReleaseInput): Promise<boolean>;
+  finalizeComputerControlRelease(
+    input: FinalizeComputerControlReleaseInput,
+  ): Promise<FinalizeComputerControlReleaseResult | false>;
   finalizeRun(input: FinalizeRunInput): Promise<boolean>;
   notify(threadId: string, seq: number): Promise<void>;
   pauseRunForInput(input: PauseRunForInput): Promise<boolean>;
@@ -53,9 +55,14 @@ export interface FinalizeComputerControlReleaseInput {
   workspaceId: string;
   computerId: string;
   botId: string;
+  runId: string | null;
   leaseId: string;
   holder: "bot" | "none";
-  reason: "expired" | "released";
+  reason: "done" | "expired" | "released" | "skipped";
+}
+
+export interface FinalizeComputerControlReleaseResult {
+  runId: string | null;
 }
 
 interface FinalizeRunBase {
@@ -530,7 +537,7 @@ export async function finalizeComputerControlRelease(
   prisma: PrismaClient,
   input: FinalizeComputerControlReleaseInput,
   realtime?: RealtimeFanout,
-): Promise<boolean> {
+): Promise<FinalizeComputerControlReleaseResult | false> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const cleared = await tx.computer.updateMany({
       where: {
@@ -538,25 +545,47 @@ export async function finalizeComputerControlRelease(
         workspaceId: input.workspaceId,
         controlBotId: input.botId,
         controlLeaseId: input.leaseId,
+        controlRunId: input.runId,
       },
       data: {
         controlHolder: input.holder,
         controlLeaseId: null,
         controlLeaseExpiresAt: null,
         controlBotId: null,
+        controlRunId: null,
       },
     });
     if (cleared.count !== 1) return null;
+
+    const resumed = input.runId
+      ? await tx.run.updateMany({
+          where: {
+            id: input.runId,
+            workspaceId: input.workspaceId,
+            botId: input.botId,
+            status: "waiting_takeover",
+          },
+          data: {
+            status: "queued",
+            checkpoint:
+              input.reason === "skipped" || input.reason === "expired"
+                ? "takeover-skipped"
+                : "takeover",
+          },
+        })
+      : { count: 0 };
+    const runId = resumed.count === 1 ? input.runId : null;
 
     const bot = await tx.bot.findFirst({
       where: { id: input.botId, workspaceId: input.workspaceId },
       select: { thread: { select: { id: true } } },
     });
-    if (!bot?.thread) return { threadId: null, seq: null };
+    if (!bot?.thread) return { threadId: null, seq: null, runId };
     const event = await appendEventInTransaction(tx, {
       workspaceId: input.workspaceId,
       threadId: bot.thread.id,
       botId: input.botId,
+      runId: runId ?? undefined,
       type: "computer.takeover.released",
       payload: {
         holder: input.holder,
@@ -564,14 +593,14 @@ export async function finalizeComputerControlRelease(
         reason: input.reason,
       },
     });
-    return { threadId: event.threadId, seq: event.seq };
+    return { threadId: event.threadId, seq: event.seq, runId };
   });
 
   if (!committed) return false;
   if (committed.threadId && committed.seq !== null) {
     await notifyRealtime(realtime, committed.threadId, committed.seq);
   }
-  return true;
+  return { runId: committed.runId };
 }
 
 export async function appendEvent(
