@@ -773,6 +773,7 @@ export function createRouter(deps: RouterDeps) {
           threadId: target.threadId,
           runId: input.runId,
           messageId: input.messageId,
+          answeredByUserId: context.actor.userId,
           answer: input.answer,
         });
         if (!answered) {
@@ -1809,6 +1810,62 @@ export function createRouter(deps: RouterDeps) {
             userId: context.actor.userId,
           },
           data: { status: "revoked" },
+        });
+        return { ok: true as const };
+      }),
+    },
+    approvalRules: {
+      list: authed.approvalRules.list.handler(async ({ context }) => {
+        const rows = await deps.prisma.actionApprovalRule.findMany({
+          where: {
+            workspaceId: context.actor.workspaceId,
+            createdByUserId: context.actor.userId,
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          effect: row.effect as "always_allow" | "require_approval",
+          matchKind: row.matchKind as "tool" | "connector" | "category",
+          matchValue: row.matchValue,
+          createdAt: row.createdAt.toISOString(),
+        }));
+      }),
+      set: authed.approvalRules.set.handler(async ({ context, input }) => {
+        const row = await deps.prisma.actionApprovalRule.upsert({
+          where: {
+            workspaceId_createdByUserId_effect_matchKind_matchValue: {
+              workspaceId: context.actor.workspaceId,
+              createdByUserId: context.actor.userId,
+              effect: input.effect,
+              matchKind: input.matchKind,
+              matchValue: input.matchValue,
+            },
+          },
+          create: {
+            workspaceId: context.actor.workspaceId,
+            createdByUserId: context.actor.userId,
+            effect: input.effect,
+            matchKind: input.matchKind,
+            matchValue: input.matchValue,
+          },
+          update: {},
+        });
+        return {
+          id: row.id,
+          effect: row.effect as "always_allow" | "require_approval",
+          matchKind: row.matchKind as "tool" | "connector" | "category",
+          matchValue: row.matchValue,
+          createdAt: row.createdAt.toISOString(),
+        };
+      }),
+      remove: authed.approvalRules.remove.handler(async ({ context, input }) => {
+        await deps.prisma.actionApprovalRule.deleteMany({
+          where: {
+            id: input.id,
+            workspaceId: context.actor.workspaceId,
+            createdByUserId: context.actor.userId,
+          },
         });
         return { ok: true as const };
       }),

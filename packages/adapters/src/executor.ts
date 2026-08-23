@@ -18,10 +18,12 @@ import { historyCompactJob, routineWakeupJob, runContinueJob } from "@rakazo/ada
 import type { MessageBlock, RunStatus } from "@rakazo/contracts";
 import { ATTACHMENT_MAX_BYTES, isAttachmentImageMimeType } from "@rakazo/contracts";
 import {
+  type ActionApprovalRule,
   appendTextSegment,
   appendToolCallSegment,
   assertTransition,
   blocksToAgentHistoryText,
+  connectorKindFromToolName,
   containsSecret,
   createStreamingRedactor,
   endsSentence,
@@ -33,13 +35,16 @@ import {
   nextFence,
   promptInvokesSkill,
   redactSecrets,
+  resolveActionApproval,
   sandboxCommandTimeoutMs,
   type ToolCallStreak,
   type ToolNameStreak,
+  toolRequiresApproval,
   trackToolCallStreak,
   trackToolNameStreak,
   userTurnBlocksForRun,
 } from "@rakazo/core";
+import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import {
   appendEventInTransaction,
   createThreadMessageInTransaction,
@@ -49,6 +54,17 @@ import {
   parseComputerMode,
   type ThreadEvents,
 } from "@rakazo/db";
+import { buildApprovalAskBlock } from "./approval-ask.js";
+import {
+  approvalPausedToolResult,
+  claimApprovedEffect,
+  claimIntendedEffect,
+  completeExternalEffect,
+  isApprovalPausedResult,
+  resolveDuplicateEffectGate,
+  settleUncertainEffect,
+  uncertainEffectResult,
+} from "./approval-effect.js";
 import { builtinAgentTools } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import {
@@ -139,6 +155,7 @@ const GRAPHICAL_AGENT_TOOLS = new Set([
   "open_path",
   "launch_app",
 ]);
+const BUILTIN_AGENT_TOOL_NAMES = new Set(builtinAgentTools.map((tool) => tool.name));
 
 export interface ExecutorDeps {
   prisma: PrismaClient;
@@ -605,6 +622,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const readOnlyConnectorTools = new Set(
           exposedConnectorTools.filter((tool) => tool.readOnly).map((tool) => tool.name),
         );
+        let approvalRulesPromise: Promise<ActionApprovalRule[]> | undefined;
+        const loadApprovalRules = () => {
+          approvalRulesPromise ??= deps.prisma.actionApprovalRule
+            .findMany({
+              where: { workspaceId: run.workspaceId, createdByUserId: run.userId },
+              select: { effect: true, matchKind: true, matchValue: true },
+            })
+            .then((rules) => rules as ActionApprovalRule[]);
+          return approvalRulesPromise;
+        };
         const tools = [...builtins, ...exposedConnectorTools];
         const computerInstruction = graphical
           ? "You have a persistent computer. Use computer_observe and computer_act for its visible desktop, including browsers and installed applications. Use open_path and launch_app to open graphical files, URLs, and applications. Use the file tools and shell for precise filesystem and terminal work. On a Team Computer you have your own screen; other Team bots may run at the same time on theirs. Another user may interact with your screen while you run, so re-observe when it may have changed."
@@ -640,6 +667,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let toolNameStreak: ToolNameStreak = { name: undefined, count: 0 };
         let lastComputerFrameId: string | undefined;
         let terminalCheckpointComplete = false;
+        let approvalPausePending = false;
         const progressRedactor = createStreamingRedactor(runSecrets);
         const scripted = deps.runtime.describe().capabilities.scripted;
         const script = scripted
@@ -672,27 +700,125 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return result;
         };
 
+        const pauseForApproval = () => {
+          approvalPausePending = true;
+          return approvalPausedToolResult();
+        };
+
         const applyTool = async (
           name: string,
           args: Record<string, unknown>,
           executionId: string,
         ) => {
+          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
+          const requiresApprovalByDefault = toolRequiresApproval(name, viaConnector);
+          const approvalDecision = resolveActionApproval({
+            toolName: name,
+            connectorKind: connectorKindFromToolName(
+              name,
+              connectedPlugins.map((plugin) => plugin.provider),
+            ),
+            rules: await loadApprovalRules(),
+          });
+          const needsApproval = approvalDecision === "ask";
+          const bypassApproval = approvalDecision === "allow" && requiresApprovalByDefault;
+          const effectKey =
+            needsApproval || requiresApprovalByDefault
+              ? approvalEffectKey(runId, name, args)
+              : executionId;
           const applied =
             READ_ONLY_AGENT_TOOLS.has(name) || readOnlyConnectorTools.has(name)
               ? undefined
-              : await recordEffect(deps, run, name, executionId, args);
-          if (applied?.duplicate) {
-            if (applied.effect.status === "completed") {
-              return applied.effect.result ?? { duplicate: true };
+              : await recordEffect(deps, run, name, effectKey, args);
+          let claimedEffect = false;
+
+          const claimOrReturn = async (
+            from: "approved" | "intended",
+          ): Promise<unknown | undefined> => {
+            const claim = from === "approved" ? claimApprovedEffect : claimIntendedEffect;
+            if (await claim(deps.prisma, applied!.effect.id)) {
+              claimedEffect = true;
+              return undefined;
             }
-            if (name !== "spawn_bot" && name !== "archive_bot" && name !== "delete_bot") {
-              throw new Error(`tool ${name} has an earlier execution with an uncertain outcome`);
+            const current = await deps.prisma.externalEffect.findUnique({
+              where: { id: applied!.effect.id },
+            });
+            if (current) {
+              const retryGate = resolveDuplicateEffectGate(current, name);
+              if (retryGate.action === "return") return retryGate.result;
+              if (retryGate.action === "uncertain") {
+                return settleUncertainEffect(deps.prisma, applied!.effect.id, name);
+              }
             }
-          }
-          const finish = async (result: unknown) => {
-            if (applied) await completeEffect(deps, applied.effect.id, result);
-            return result;
+            throw uncertainEffectError(name);
           };
+
+          const requestApproval = async () => {
+            if (!(await renewRunLease(deps, runId, workerId, fence))) {
+              return pauseForApproval();
+            }
+            await checkpointAndRecordComputerWorkspace(deps, storedComputer, computer, context);
+            const paused = await deps.events.pauseRunForInput({
+              workspaceId: run.workspaceId,
+              threadId: run.threadId,
+              botId: run.botId,
+              runId,
+              attemptId: attempt.id,
+              leaseOwner: workerId,
+              leaseFence: fence,
+              blocks: [buildApprovalAskBlock(applied!.effect.id, name, args, runSecrets)],
+            });
+            if (!paused) return pauseForApproval();
+            await notifyRun(deps, run, {
+              kind: "help",
+              title: `${bot.name} needs approval`,
+              body: `Review before ${name}`,
+              botId: bot.id,
+              threadId: thread.id,
+            });
+            return pauseForApproval();
+          };
+
+          if (applied?.duplicate) {
+            const gate = resolveDuplicateEffectGate(applied.effect, name);
+            if (gate.action === "return") return gate.result;
+            if (gate.action === "paused") {
+              if (!needsApproval) {
+                const early = await claimOrReturn("intended");
+                if (early !== undefined) return early;
+              } else {
+                const current = await deps.prisma.run.findUnique({
+                  where: { id: runId },
+                  select: { status: true },
+                });
+                if (current?.status === "waiting_input") {
+                  return pauseForApproval();
+                }
+                return requestApproval();
+              }
+            } else if (gate.action === "uncertain") {
+              return settleUncertainEffect(deps.prisma, applied.effect.id, gate.toolName);
+            } else if (gate.action === "execute") {
+              const early = await claimOrReturn("approved");
+              if (early !== undefined) return early;
+            }
+          } else if (needsApproval && applied) {
+            return requestApproval();
+          } else if (bypassApproval && applied) {
+            const early = await claimOrReturn("intended");
+            if (early !== undefined) return early;
+          }
+          const persistEffectResult = (result: unknown) =>
+            applied
+              ? completeEffect(
+                  deps,
+                  applied.effect.id,
+                  claimedEffect ? "executing" : "intended",
+                  result,
+                )
+              : Promise.resolve(true);
+          const finish = async (result: unknown) =>
+            (await persistEffectResult(result)) ? result : uncertainEffectResult(name);
           if (name === "computer_observe") {
             if (await getActiveTeachingSession(deps.prisma, run.workspaceId, run.botId)) {
               return { error: "Teaching is in progress. Stop teaching before using the computer." };
@@ -1043,7 +1169,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               prompt: args.prompt ? String(args.prompt) : undefined,
             });
             if ("error" in spawned) return finish(spawned);
-            await finish(spawned);
+            if (!(await persistEffectResult(spawned))) return uncertainEffectResult(name);
             try {
               await publishMessage(deps, run, "bot", [
                 {
@@ -1093,7 +1219,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               context,
             );
             if ("error" in archived) return finish(archived);
-            await finish(archived);
+            if (!(await persistEffectResult(archived))) return uncertainEffectResult(name);
             try {
               await publishMessage(deps, run, "bot", [
                 {
@@ -1119,7 +1245,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (deps.connector) {
             let result: unknown = { error: `unknown tool ${name}` };
             for await (const event of deps.connector.execute(
-              { tool: name, args, executionId, route: connectorRoutes.get(name) },
+              { tool: name, args, executionId: effectKey, route: connectorRoutes.get(name) },
               context,
             )) {
               if (event.type === "result") {
@@ -1232,6 +1358,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             },
             context,
           )) {
+            if (approvalPausePending) return;
             if (!leaseValid) return;
             const now = Date.now();
             if (now - lastLeaseCheckAt >= 1_000) {
@@ -1254,6 +1381,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (event.type === "text") {
               assembled += event.text;
               currentTextSegment += event.text;
+              toolCallStreak = { key: undefined, count: 0 };
               toolNameStreak = { name: undefined, count: 0 };
               tryFlushPendingTools();
               pendingProgress += progressRedactor.push(event.text);
@@ -1262,6 +1390,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 await flushProgress();
               }
             } else if (event.type === "progress") {
+              toolCallStreak = { key: undefined, count: 0 };
+              toolNameStreak = { name: undefined, count: 0 };
               // Flush batched text deltas first so an activity line cannot land
               // ahead of text the model streamed before the tool call.
               if (pendingProgress) {
@@ -1407,7 +1537,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 runAbortController?.abort();
                 return;
               }
-              if (scripted) await applyTool(event.name, event.args, event.executionId);
+              if (scripted) {
+                const result = await applyTool(event.name, event.args, event.executionId);
+                if (isApprovalPausedResult(result)) return;
+              }
             } else if (event.type === "subagent") {
               const safeTask = redactSecrets(event.task, runSecrets);
               const safeProgress = event.progress
@@ -1463,6 +1596,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
 
+          if (approvalPausePending) return;
           pendingProgress += progressRedactor.finish();
           await flushProgress();
 
@@ -1792,7 +1926,12 @@ async function recordEffect(
   return { duplicate: false, effect };
 }
 
-async function completeEffect(deps: ExecutorDeps, effectId: string, result: unknown) {
+async function completeEffect(
+  deps: ExecutorDeps,
+  effectId: string,
+  expectedStatus: "intended" | "executing",
+  result: unknown,
+) {
   const storedResult =
     result &&
     typeof result === "object" &&
@@ -1800,10 +1939,13 @@ async function completeEffect(deps: ExecutorDeps, effectId: string, result: unkn
     "details" in result
       ? (result as { details: unknown }).details
       : result;
-  await deps.prisma.externalEffect.update({
-    where: { id: effectId },
-    data: { status: "completed", result: storedResult as never },
-  });
+  return completeExternalEffect(deps.prisma, effectId, expectedStatus, storedResult as never);
+}
+
+function uncertainEffectError(toolName: string): Error {
+  return new Error(
+    `tool ${toolName} has an earlier execution with an uncertain outcome; it may already have completed, so verify the destination before retrying`,
+  );
 }
 
 async function runSandboxCommand(
