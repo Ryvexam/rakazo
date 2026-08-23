@@ -331,6 +331,28 @@ export const ModelCredentialSchema = z.object({
 });
 export type ModelCredential = z.infer<typeof ModelCredentialSchema>;
 
+export const ModelOAuthSignInModeSchema = z.enum(["device-code", "auth-url"]);
+export type ModelOAuthSignInMode = z.infer<typeof ModelOAuthSignInModeSchema>;
+
+const ModelOAuthBeginBaseSchema = z.object({
+  loginId: z.string(),
+  provider: z.string(),
+  verificationUri: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith("https://"), "Expected an HTTPS authorization URL"),
+  expiresInSeconds: z.number().int().positive(),
+});
+
+export const ModelOAuthBeginSchema = z.discriminatedUnion("mode", [
+  ModelOAuthBeginBaseSchema.extend({
+    mode: z.literal("device-code"),
+    userCode: z.string().min(1),
+  }),
+  ModelOAuthBeginBaseSchema.extend({ mode: z.literal("auth-url") }),
+]);
+export type ModelOAuthBegin = z.infer<typeof ModelOAuthBeginSchema>;
+
 export const WorkspaceMemoryConfigSchema = z.object({
   provider: z.string(),
   settings: z.record(z.string(), z.string()),
@@ -347,8 +369,9 @@ export const ModelCatalogEntrySchema = z.object({
   billing: z.string(),
   auth: z.enum(["api-key", "oauth", "both"]).optional(),
   oauthLabel: z.string().optional(),
+  authHint: z.string().optional(),
   subscription: z.boolean().optional(),
-  signIn: z.enum(["device-code"]).optional(),
+  signIn: ModelOAuthSignInModeSchema.optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
