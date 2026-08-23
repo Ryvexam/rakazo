@@ -90,23 +90,40 @@ export const BotSectionSchema = z.object({
 });
 export type BotSection = z.infer<typeof BotSectionSchema>;
 
+export const BOT_NAME_MAX_LENGTH = 80;
+export const BOT_TITLE_MAX_LENGTH = 500;
+export const BOT_DESCRIPTION_MAX_LENGTH = 4000;
+export const BOT_INSTRUCTIONS_MAX_LENGTH = 20000;
+
 export const CreateBotInput = z.object({
-  name: z.string().min(1).max(80),
-  title: z.string().max(160).default(""),
-  description: z.string().max(4000).default(""),
-  instructions: z.string().max(20000).default(""),
+  name: z.string().trim().min(1).max(BOT_NAME_MAX_LENGTH),
+  title: z.string().max(BOT_TITLE_MAX_LENGTH).default(""),
+  description: z.string().max(BOT_DESCRIPTION_MAX_LENGTH).default(""),
+  instructions: z.string().max(BOT_INSTRUCTIONS_MAX_LENGTH).default(""),
   notifyOnFinish: z.boolean().default(true),
   color: z.string().optional(),
   computerMode: ComputerModeSchema.default("team"),
 });
 export type CreateBotInput = z.infer<typeof CreateBotInput>;
 
+export function normalizeCreateBotProfile(
+  input: Pick<CreateBotInput, "name" | "title" | "description">,
+) {
+  const description = input.description.trim();
+  return {
+    name: input.name.trim().slice(0, BOT_NAME_MAX_LENGTH),
+    title: input.title.trim().slice(0, BOT_TITLE_MAX_LENGTH),
+    description: description.slice(0, BOT_DESCRIPTION_MAX_LENGTH),
+    instructions: description.slice(0, BOT_INSTRUCTIONS_MAX_LENGTH),
+  };
+}
+
 export const UpdateBotInput = z.object({
   botId: Id,
-  name: z.string().min(1).max(80).optional(),
-  title: z.string().max(160).optional(),
-  description: z.string().max(4000).optional(),
-  instructions: z.string().max(20000).optional(),
+  name: z.string().trim().min(1).max(BOT_NAME_MAX_LENGTH).optional(),
+  title: z.string().max(BOT_TITLE_MAX_LENGTH).optional(),
+  description: z.string().max(BOT_DESCRIPTION_MAX_LENGTH).optional(),
+  instructions: z.string().max(BOT_INSTRUCTIONS_MAX_LENGTH).optional(),
   notifyOnFinish: z.boolean().optional(),
   color: z.string().optional(),
   pinned: z.boolean().optional(),
