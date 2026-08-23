@@ -21,6 +21,7 @@ import {
   PiAgentRuntime,
   PostgresRealtimeFanout,
   ScriptedAgentRuntime,
+  WorkspaceMemoryProviderResolver,
 } from "@rakazo/adapters";
 import { resolveEncryptionKey } from "@rakazo/core";
 import { createDb, createThreadEvents } from "@rakazo/db";
@@ -53,6 +54,7 @@ async function main() {
   const connector = stack.destination;
   await connector.start();
   const secrets = new EncryptedSecretStore(resolveEncryptionKey(process.env));
+  const memoryProviders = new WorkspaceMemoryProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
@@ -63,6 +65,7 @@ async function main() {
     runtime,
     sandbox,
     memory: new MarkdownMemoryStore(prisma),
+    memoryProviders,
     home,
     artifacts,
     connector: stack.connector,
@@ -87,6 +90,8 @@ async function main() {
     events,
     workerId: process.pid.toString(),
     runtime,
+    secretStore: secrets,
+    memoryProviders,
     deploymentModelKey: process.env.OPENROUTER_API_KEY,
   });
   await jobHost.start(jobHandlers);
