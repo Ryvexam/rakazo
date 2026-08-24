@@ -7,7 +7,11 @@ export function resolveMobileUiLocale(): string {
 
 export function applyMobileUiDirection(locale = resolveMobileUiLocale()) {
   const rtl = textDirectionForLocale(locale) === "rtl";
-  I18nManager.allowRTL(rtl);
-  I18nManager.forceRTL(rtl);
+  // Always allow RTL so a later locale switch can take effect after relaunch.
+  I18nManager.allowRTL(true);
+  // forceRTL persists and applies on the next cold start (RN contract).
+  if (I18nManager.isRTL !== rtl) {
+    I18nManager.forceRTL(rtl);
+  }
   return rtl;
 }

@@ -2904,11 +2904,12 @@ const MessageView = memo(function MessageView({
               if (block.kind === "steps") {
                 const isCurrentBlock = isLive && i === message.blocks.length - 1;
                 return (
-                  <ToolSteps
-                    key={i}
-                    steps={block.steps}
-                    currentIndex={isCurrentBlock ? block.steps.length - 1 : undefined}
-                  />
+                  <div key={i} dir="ltr">
+                    <ToolSteps
+                      steps={block.steps}
+                      currentIndex={isCurrentBlock ? block.steps.length - 1 : undefined}
+                    />
+                  </div>
                 );
               }
               if (block.kind === "text" || block.kind === "progress") {
@@ -2980,7 +2981,10 @@ const MessageView = memo(function MessageView({
         if (block.kind === "steps") {
           return (
             <div key={i} className="flex justify-start">
-              <div className="max-w-[74%] space-y-1.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3">
+              <div
+                className="max-w-[74%] space-y-1.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3"
+                dir="ltr"
+              >
                 <ToolSteps
                   steps={block.steps}
                   currentIndex={isLive ? block.steps.length - 1 : undefined}
@@ -3058,9 +3062,9 @@ const MessageView = memo(function MessageView({
               <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]" dir="auto">
                 {removed
                   ? block.status === "archived"
-                    ? "Archived this bot. Its chat, memory, and files are preserved."
-                    : "Removed this bot, including its chat, computer, and memory."
-                  : block.title || "Opened its own thread. Tap to switch."}
+                    ? "Archived. Chat, memory, and files kept."
+                    : "Removed with chat, computer, and memory."
+                  : block.title || "Opened its thread."}
               </div>
             </button>
           );
