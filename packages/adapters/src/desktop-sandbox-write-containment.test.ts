@@ -68,6 +68,15 @@ async function fixture(botId: string) {
   return { root, desktop, computer };
 }
 
+async function pathExists(target: string) {
+  try {
+    await realpath(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe("desktop sandbox write containment without O_NOFOLLOW", () => {
   it("rejects an existing final symlink without changing its outside target", async () => {
     const { root, desktop, computer } = await fixture("static-link");
@@ -228,6 +237,57 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     await expect(readFile(path.join(outside, "nested"), "utf8")).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("rejects when path containment and the opened inode diverge after a parent swap", async () => {
+    const { root, desktop, computer } = await fixture("inode-diverge");
+    const parent = path.join(computer.providerRef, "notes");
+    const displaced = path.join(computer.providerRef, "notes-original");
+    const outside = path.join(root, "outside-directory");
+    await mkdir(parent);
+    await mkdir(outside);
+    await writeFile(path.join(parent, "result.txt"), "inside-before");
+    await writeFile(path.join(outside, "result.txt"), "outside-before");
+
+    // Force pathname opens so containment must bind directory/file inodes (Windows path).
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
+    try {
+      let notesRealpaths = 0;
+      lstatRace.afterRealpath = async (inspected) => {
+        if (path.basename(inspected) !== "notes") return;
+        notesRealpaths += 1;
+        // After openContainedWorkspaceFile's parent realpath, point the pathname at an
+        // outside directory. Without binding the opened parent inode to a fresh
+        // contained realpath, later checks could validate a restored inside path
+        // while the handle still referred outside.
+        if (notesRealpaths !== 2) return;
+        await rename(parent, displaced);
+        await symlink(outside, parent, "junction");
+      };
+      lstatRace.after = async (inspected) => {
+        if (path.basename(inspected) !== "result.txt") return;
+        // If a child open happened, restore an inside pathname so realpath-only
+        // containment would incorrectly pass without an inode bind.
+        if (!(await pathExists(parent))) return;
+        await rm(parent, { force: true });
+        if (await pathExists(displaced)) await rename(displaced, parent);
+      };
+
+      await expect(
+        desktop.writeFile(computer, {
+          path: "notes/result.txt",
+          content: new TextEncoder().encode("after"),
+        }),
+      ).rejects.toThrow();
+      expect(notesRealpaths).toBeGreaterThanOrEqual(2);
+      expect(await readFile(path.join(outside, "result.txt"), "utf8")).toBe("outside-before");
+      // Inside content lives under the displaced original parent after the race.
+      expect(await readFile(path.join(displaced, "result.txt"), "utf8")).toBe("inside-before");
+    } finally {
+      if (platform) Object.defineProperty(process, "platform", platform);
+      else Object.defineProperty(process, "platform", { configurable: true, value: "linux" });
+    }
   });
 
   it("rejects a hard link whose other name is outside the workspace", async () => {

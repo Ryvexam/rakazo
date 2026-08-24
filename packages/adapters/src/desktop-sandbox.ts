@@ -325,19 +325,21 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
             resolved,
             constants.O_RDONLY | (constants.O_DIRECTORY ?? 0),
           );
-          const after = await nextHandle.stat();
-          if (
-            !after.isDirectory() ||
-            after.dev !== before.dev ||
-            after.ino !== before.ino ||
-            !isAllowedDesktopPath(resolved, [resolvedHome])
-          ) {
+          try {
+            // Re-resolve after open so a junction swap cannot leave us holding an
+            // outside directory while still trusting the earlier inside pathname.
+            current = await assertContainedDirectoryHandle(
+              nextHandle,
+              resolved,
+              resolvedHome,
+              before,
+            );
+          } catch (error) {
             await nextHandle.close().catch(() => undefined);
-            throw new Error("Path escapes the computer workspace");
+            throw error;
           }
           await parentHandle.close().catch(() => undefined);
           parentHandle = nextHandle;
-          current = resolved;
         } catch (error) {
           if (created) await rm(next, { recursive: true, force: true }).catch(() => undefined);
           throw error;
@@ -374,18 +376,19 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
   let openedPath = path.join(parentReal, name);
   let viaDirFd: string | undefined;
   try {
-    const parentAfter = await parentHandle.stat();
-    if (
-      !parentAfter.isDirectory() ||
-      parentAfter.dev !== parentBefore.dev ||
-      parentAfter.ino !== parentBefore.ino
-    ) {
-      throw new Error("Path escapes the computer workspace");
-    }
+    // Bind the parent handle to a still-contained realpath. Otherwise a swap
+    // after the first realpath can make inode checks agree on an outside dir
+    // while pathname containment still sees the stale inside path.
+    const containedParent = await assertContainedDirectoryHandle(
+      parentHandle,
+      parentReal,
+      resolvedHome,
+      parentBefore,
+    );
 
     // Prefer directory-fd relative opens so a parent path swap cannot redirect creates.
     viaDirFd = childPathViaDirFd(parentHandle.fd, name);
-    openedPath = viaDirFd ?? path.join(parentReal, name);
+    openedPath = viaDirFd ?? path.join(containedParent, name);
 
     try {
       // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
@@ -417,7 +420,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
     if (!viaDirFd) {
       // Bind containment to the opened inode so a path swap cannot validate a
       // different inside path while the handle still refers outside.
-      const resolved = await realpath(path.join(parentReal, name));
+      const resolved = await realpath(path.join(containedParent, name));
       if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
         throw new Error("Path escapes the computer workspace");
       }
@@ -446,6 +449,34 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
   } finally {
     await parentHandle.close().catch(() => undefined);
   }
+}
+
+async function assertContainedDirectoryHandle(
+  handle: Awaited<ReturnType<typeof open>>,
+  pathToRecheck: string,
+  resolvedHome: string,
+  expected?: { dev: number; ino: number },
+) {
+  const after = await handle.stat();
+  if (
+    !after.isDirectory() ||
+    (expected && (after.dev !== expected.dev || after.ino !== expected.ino))
+  ) {
+    throw new Error("Path escapes the computer workspace");
+  }
+  const resolved = await realpath(pathToRecheck);
+  if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+    throw new Error("Path escapes the computer workspace");
+  }
+  const resolvedStat = await stat(resolved);
+  if (
+    !resolvedStat.isDirectory() ||
+    resolvedStat.dev !== after.dev ||
+    resolvedStat.ino !== after.ino
+  ) {
+    throw new Error("Path escapes the computer workspace");
+  }
+  return resolved;
 }
 
 function childPathViaDirFd(fd: number, name: string) {
