@@ -193,8 +193,9 @@ jobs:
           if (-not (Select-String -Path $config -Pattern '^publisherName:' -Quiet)) {
             throw "Windows update config is not bound to the signing publisher."
           }
+          $feed = Get-Content -Raw $config
           foreach ($expected in @("provider: github", "owner: elie222", "repo: rakazo")) {
-            if (-not (Select-String -Path $config -Pattern "^$([regex]::Escape($expected))$" -Quiet)) {
+            if ($feed -notmatch "(?m)^$([regex]::Escape($expected))\r?$") {
               throw "Windows update config missing '$expected'."
             }
           }
