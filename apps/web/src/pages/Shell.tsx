@@ -2047,6 +2047,13 @@ export function ShellPage() {
                         setSavingRoutine(false);
                       }
                       if (
+                        routineSaveRequest.current !== saveRequest ||
+                        activeBotId.current !== targetBotId
+                      ) {
+                        return;
+                      }
+                      await refreshThread(targetBotId).catch(() => undefined);
+                      if (
                         routineSaveRequest.current === saveRequest &&
                         activeBotId.current === targetBotId
                       ) {
