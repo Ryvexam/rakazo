@@ -145,9 +145,10 @@ services:
         condition: service_healthy
 
   # The updater holds the Docker socket, which is root-equivalent on the host, so it is deliberately
-  # the narrowest service here: no `ports` (nothing on the host), and only the dedicated `control`
-  # network shared with the API. Caddy has no route to it. The API reaches it as
-  # http://updater:7092 with the shared token. It is also the one service the update never
+  # the narrowest service here: no `ports` (nothing on the host), only the dedicated `control`
+  # network shared with the API, and no `env_file` — secrets stay in the bind-mounted `.env` that
+  # Compose reads for interpolation, not in this process. Caddy has no route to it. The API reaches
+  # it as http://updater:7092 with the shared token. It is also the one service the update never
   # recreates, because it is the process performing the update.
   updater:
     # Pinned separately from the application image: the updater does not recreate itself, so moving
@@ -165,12 +166,12 @@ services:
       - no-new-privileges:true
     pids_limit: 256
     mem_limit: 1g
-    env_file:
-      - ../../.env
     environment:
       NODE_ENV: production
+      RAKAZO_UPDATER_TOKEN: ${RAKAZO_UPDATER_TOKEN:?Set RAKAZO_UPDATER_TOKEN in .env}
       RAKAZO_UPDATER_HOST: "0.0.0.0"
       RAKAZO_UPDATER_PORT: "7092"
+      RAKAZO_IMAGE: ${RAKAZO_IMAGE:-ghcr.io/elie222/rakazo/app}
       # `-p` is available to Compose interpolation but is not injected into containers unless it is
       # declared here. The sidecar must target the project the operator actually started.
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-rakazo-prod}

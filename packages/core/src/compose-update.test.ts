@@ -265,6 +265,7 @@ describe("compose project name resolution", () => {
 describe("dirty-tree argv and CRLF filtering", () => {
   it("runs status with autocrlf as its own -c arguments, not interpolated into a shell string", () => {
     expect(gitStatusArgv()).toEqual([
+      "--no-optional-locks",
       "-c",
       "core.autocrlf=true",
       "status",
@@ -272,6 +273,7 @@ describe("dirty-tree argv and CRLF filtering", () => {
       "--untracked-files=no",
     ]);
     expect(gitWorktreeContentDiffArgv()).toEqual([
+      "--no-optional-locks",
       "-c",
       "core.autocrlf=true",
       "diff",
@@ -279,6 +281,7 @@ describe("dirty-tree argv and CRLF filtering", () => {
       "--ignore-cr-at-eol",
     ]);
     expect(gitIndexContentDiffArgv()).toEqual([
+      "--no-optional-locks",
       "-c",
       "core.autocrlf=true",
       "diff",
@@ -286,7 +289,12 @@ describe("dirty-tree argv and CRLF filtering", () => {
       "--name-only",
       "--ignore-cr-at-eol",
     ]);
-    expect(gitUntrackedFilesArgv()).toEqual(["ls-files", "--others", "--exclude-standard"]);
+    expect(gitUntrackedFilesArgv()).toEqual([
+      "--no-optional-locks",
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+    ]);
   });
 
   it("reads git name-only output as one path per line", () => {

@@ -132,7 +132,11 @@ const runCommand: UpdaterCommandRunner = (
           return;
         }
         const exitCode = typeof error.code === "number" ? error.code : null;
-        resolve({ ok: false, exitCode, output: output || error.message });
+        const timedOut = "killed" in error && Boolean(error.killed);
+        const reason = timedOut
+          ? `Timed out after ${options.timeoutMs}ms (${"signal" in error && error.signal ? String(error.signal) : "killed"}).`
+          : error.message;
+        resolve({ ok: false, exitCode, output: output ? `${output}\n${reason}` : reason });
       },
     );
   });
@@ -149,6 +153,7 @@ export function createUpdaterApp(
     projectName: config.projectName,
   };
   let running = false;
+  let planInFlight: Promise<unknown> | null = null;
 
   app.get("/health", (c) => c.json({ ok: true, service: "updater", image: config.image }));
 
@@ -183,34 +188,41 @@ export function createUpdaterApp(
 
   app.post("/plan", async (c) => {
     try {
+      if (planInFlight !== null) throw new UpdateRefused("A plan is already running.");
       const request = parseRequest(await body(c.req.raw));
-      const tags = readTagState(await readEnvFile());
-      const decision = chooseUpdateStrategy(request);
-      const checkout = await readCheckout();
-      if (decision.strategy === "build") {
-        const targetCommit = await resolveRemoteHead(request);
-        return c.json({
+      const work = (async () => {
+        const tags = readTagState(await readEnvFile());
+        const decision = chooseUpdateStrategy(request);
+        const checkout = await readCheckout();
+        if (decision.strategy === "build") {
+          const targetCommit = await resolveRemoteHead(request);
+          return {
+            strategy: decision.strategy,
+            reason: decision.reason,
+            currentTag: tags.currentTag,
+            previousTag: tags.previousTag,
+            targetTag: null as string | null,
+            targetCommit,
+            upToDate: upToDateForBuild(tags.currentTag, checkout.commit, targetCommit),
+            checkout,
+          };
+        }
+        const target = await resolveRelease(request.repoUrl);
+        return {
           strategy: decision.strategy,
-          reason: decision.reason,
+          reason: `${decision.reason} Latest stable release: ${target.releaseTag}.`,
           currentTag: tags.currentTag,
           previousTag: tags.previousTag,
-          targetTag: null,
-          targetCommit,
-          upToDate: upToDateForBuild(tags.currentTag, checkout.commit, targetCommit),
+          targetTag: target.imageTag,
+          targetCommit: target.commit,
+          upToDate: target.imageTag === tags.currentTag,
           checkout,
-        });
-      }
-      const target = await resolveRelease(request.repoUrl);
-      return c.json({
-        strategy: decision.strategy,
-        reason: `${decision.reason} Latest stable release: ${target.releaseTag}.`,
-        currentTag: tags.currentTag,
-        previousTag: tags.previousTag,
-        targetTag: target.imageTag,
-        targetCommit: target.commit,
-        upToDate: target.imageTag === tags.currentTag,
-        checkout,
+        };
+      })();
+      planInFlight = work.finally(() => {
+        planInFlight = null;
       });
+      return c.json(await work);
     } catch (error) {
       return refusal(c, error);
     }
@@ -733,9 +745,9 @@ function startUpdater() {
 }
 
 /**
- * Put the worktree back on the pre-update branch and commit. `checkout -B` is required (not only
- * `reset --hard`) so a failed plan that already switched branches cannot leave the wrong branch
- * tip pointed at the pre-update commit, or leave the operator on the update target branch.
+ * Put the worktree back on the pre-update branch and commit. `checkout -B` restores a named
+ * branch; detached checkouts must use `--detach` so recovery cannot attach to the update target
+ * branch and move that tip to the old commit.
  */
 export function restoreCheckoutArgv(fromBranch: string | null, fromCommit: string): string[] {
   if (!isGitCommit(fromCommit)) throw new Error("Checkout restore needs a resolved commit.");
@@ -743,7 +755,7 @@ export function restoreCheckoutArgv(fromBranch: string | null, fromCommit: strin
     const branch = normalizeUpdateBranch(fromBranch);
     if (!("error" in branch)) return ["checkout", "-B", branch.branch, fromCommit];
   }
-  return ["reset", "--hard", fromCommit];
+  return ["checkout", "--detach", fromCommit];
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

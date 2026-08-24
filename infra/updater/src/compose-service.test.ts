@@ -10,6 +10,7 @@ interface ComposeService {
   networks?: string[];
   volumes?: string[];
   environment?: Record<string, string>;
+  env_file?: unknown;
   command?: unknown;
   user?: string;
 }
@@ -54,12 +55,9 @@ describe("the updater compose service", () => {
 
   it("is bind-mounted at the same path it has on the host", () => {
     const mount = (updater.volumes ?? []).find((volume) => volume.includes("RAKAZO_DEPLOY_DIR"));
-    const [source, destination] = (mount ?? "").split(":").reduce<string[]>((parts, piece) => {
-      // The value carries a `:?` default, so split on the separator between source and destination.
-      if (parts.length === 0 || piece.startsWith("$") || piece.startsWith("/")) parts.push(piece);
-      else parts[parts.length - 1] = `${parts[parts.length - 1]}:${piece}`;
-      return parts;
-    }, []);
+    const separatorIndex = mount?.indexOf("}:${") ?? -1;
+    const source = separatorIndex < 0 ? undefined : mount?.slice(0, separatorIndex + 1);
+    const destination = separatorIndex < 0 ? undefined : mount?.slice(separatorIndex + 2);
     expect(source).toBe(destination);
   });
 
@@ -87,6 +85,11 @@ describe("the updater compose service", () => {
   it("injects the actual Compose project name into the updater container", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the literal Compose expression
     expect(updater.environment?.COMPOSE_PROJECT_NAME).toBe("${COMPOSE_PROJECT_NAME:-rakazo-prod}");
+  });
+
+  it("does not load the application env_file into the root-equivalent process", () => {
+    expect(updater.env_file).toBeUndefined();
+    expect(updater.environment?.RAKAZO_UPDATER_TOKEN).toContain("RAKAZO_UPDATER_TOKEN");
   });
 
   it("does not let the api container reach the Docker socket to update itself", () => {

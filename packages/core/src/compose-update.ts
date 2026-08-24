@@ -339,22 +339,44 @@ export function composePsArgv(target: ComposeTarget): ComposeInvocation {
  * shell fragment.
  */
 export function gitStatusArgv(): string[] {
-  return ["-c", "core.autocrlf=true", "status", "--porcelain", "--untracked-files=no"];
+  return [
+    "--no-optional-locks",
+    "-c",
+    "core.autocrlf=true",
+    "status",
+    "--porcelain",
+    "--untracked-files=no",
+  ];
 }
 
 /** Worktree vs index, ignoring CR at EOL so a CRLF-only file does not count as dirty. */
 export function gitWorktreeContentDiffArgv(): string[] {
-  return ["-c", "core.autocrlf=true", "diff", "--name-only", "--ignore-cr-at-eol"];
+  return [
+    "--no-optional-locks",
+    "-c",
+    "core.autocrlf=true",
+    "diff",
+    "--name-only",
+    "--ignore-cr-at-eol",
+  ];
 }
 
 /** Index vs HEAD, same CR rule, so a staged content change cannot hide behind the worktree check. */
 export function gitIndexContentDiffArgv(): string[] {
-  return ["-c", "core.autocrlf=true", "diff", "--cached", "--name-only", "--ignore-cr-at-eol"];
+  return [
+    "--no-optional-locks",
+    "-c",
+    "core.autocrlf=true",
+    "diff",
+    "--cached",
+    "--name-only",
+    "--ignore-cr-at-eol",
+  ];
 }
 
 /** Untracked source can enter `COPY . .`, so a build must not silently include it. */
 export function gitUntrackedFilesArgv(): string[] {
-  return ["ls-files", "--others", "--exclude-standard"];
+  return ["--no-optional-locks", "ls-files", "--others", "--exclude-standard"];
 }
 
 export function parseGitNameOnly(stdout: string): string[] {

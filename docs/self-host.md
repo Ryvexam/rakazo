@@ -208,7 +208,7 @@ the checkout instead:
 
 ```bash
 git pull
-docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
+GIT_SHA=$(git rev-parse HEAD) docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
   up -d --wait --pull never --build api worker web
 ```
 
@@ -339,6 +339,9 @@ as that allows:
 - Only on the dedicated `control` network shared with the API. Caddy is not attached, so the
   reverse proxy has no route to the updater.
 - Every route except `/health` requires the shared bearer token, compared in constant time.
+- The process environment carries only updater settings (`RAKAZO_UPDATER_TOKEN`, deploy path,
+  image name, project name). Application secrets stay in the bind-mounted `.env` that Compose
+  reads for interpolation; they are not loaded into this container.
 - The Docker CLI lives only in the updater image. The api, worker, and web containers keep
   `cap_drop: ALL` and no socket.
 

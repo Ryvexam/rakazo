@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import type { ServerUpdateRun } from "@rakazo/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { commandEnvironment, createUpdaterApp, type UpdaterCommandRunner } from "./index.js";
+import {
+  commandEnvironment,
+  createUpdaterApp,
+  restoreCheckoutArgv,
+  type UpdaterCommandRunner,
+} from "./index.js";
 import { resolveUpdaterConfig } from "./updater-logic.js";
 
 const token = "fake-review-updater-token-000000000000";
@@ -158,14 +163,21 @@ describe("updater orchestration", () => {
     const pendingRelease = new Promise<ReturnType<typeof ok>>((resolve) => {
       releaseGate = resolve;
     });
+    let reachedRemote!: () => void;
+    const atRemote = new Promise<void>((resolve) => {
+      reachedRemote = resolve;
+    });
     const run: UpdaterCommandRunner = async (command, args) => {
-      if (command === "git" && args.includes("ls-remote")) return pendingRelease;
+      if (command === "git" && args.includes("ls-remote")) {
+        reachedRemote();
+        return pendingRelease;
+      }
       return ok();
     };
     const subject = createUpdaterApp(fixture.config, { run });
     const input = { repoUrl: "https://github.com/elie222/rakazo", branch: "main" };
     const first = request(subject, "/apply", input);
-    await Promise.resolve();
+    await atRemote;
     const second = await request(subject, "/apply", input);
     expect(second.status).toBe(400);
     await expect(second.json()).resolves.toEqual({ error: "An update is already running." });
@@ -408,5 +420,24 @@ describe("child process environment", () => {
     });
     expect(env.BETTER_AUTH_SECRET).toBeUndefined();
     expect(env.DATABASE_URL).toBeUndefined();
+  });
+
+  it("restores detached checkouts without attaching to a branch tip", () => {
+    expect(restoreCheckoutArgv("HEAD", currentCommit)).toEqual([
+      "checkout",
+      "--detach",
+      currentCommit,
+    ]);
+    expect(restoreCheckoutArgv(null, currentCommit)).toEqual([
+      "checkout",
+      "--detach",
+      currentCommit,
+    ]);
+    expect(restoreCheckoutArgv("deploy", currentCommit)).toEqual([
+      "checkout",
+      "-B",
+      "deploy",
+      currentCommit,
+    ]);
   });
 });
