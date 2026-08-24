@@ -35,6 +35,14 @@ describe("desktop release workflow", () => {
     expect(workflow).not.toMatch(/secrets\.DESKTOP_CSC_(?:LINK|KEY_PASSWORD)/);
   });
 
+  it("pins every platform update feed to the official GitHub owner and repo", () => {
+    expect(workflow).toContain('grep -Fqx "provider: github"');
+    expect(workflow).toContain('grep -Fqx "owner: elie222"');
+    expect(workflow).toContain('grep -Fqx "repo: rakazo"');
+    expect(workflow).toContain("Verify Linux update feed is pinned to the official GitHub channel");
+    expect(workflow).toContain("Windows update config missing");
+  });
+
   it("publishes only a complete stable, upgrade-only feed", () => {
     expect(workflow).toContain("^v([0-9]+)\\.([0-9]+)\\.([0-9]+)$");
     expect(workflow).toContain("must be newer than published release");

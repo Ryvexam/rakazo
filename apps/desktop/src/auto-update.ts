@@ -99,8 +99,13 @@ export function reduceUpdateState(
   if (state.phase === "unsupported") return state;
   switch (event.type) {
     case "check-start":
+      // A verified download in flight must not be reset by a stray updater event.
+      if (state.phase === "available" || state.phase === "downloading" || state.phase === "ready") {
+        return state;
+      }
       return { ...state, phase: "checking", percent: null, message: null };
     case "available":
+      if (state.phase === "downloading" || state.phase === "ready") return state;
       return {
         ...state,
         phase: "available",
@@ -110,6 +115,7 @@ export function reduceUpdateState(
         checkedAt: now,
       };
     case "not-available":
+      if (state.phase === "downloading" || state.phase === "ready") return state;
       return {
         ...state,
         phase: "idle",
@@ -119,8 +125,10 @@ export function reduceUpdateState(
         checkedAt: now,
       };
     case "download-start":
+      if (state.phase === "ready") return state;
       return { ...state, phase: "downloading", percent: 0, message: null };
     case "progress":
+      if (state.phase === "ready") return state;
       return {
         ...state,
         phase: "downloading",
@@ -135,6 +143,8 @@ export function reduceUpdateState(
         message: "Restart Rakazo to finish the update.",
       };
     case "failed": {
+      // electron-updater can emit late errors after a verified download; keep installable state.
+      if (state.phase === "ready") return state;
       const failure = classifyUpdaterFailure(event.error);
       if (failure.kind === "no-releases" && state.phase === "checking") {
         return {
@@ -169,8 +179,22 @@ export function reduceUpdateState(
   }
 }
 
+export interface ShouldCheckOptions {
+  /** Manual checks may retry after a prior empty feed; unpackaged installs stay frozen. */
+  userInitiated?: boolean;
+  environmentSupportsUpdates?: boolean;
+}
+
 /** Checks never replace an offer that is already downloading or ready to install. */
-export function shouldCheck(state: DesktopUpdateState, now: number, lastCheck: number): boolean {
+export function shouldCheck(
+  state: DesktopUpdateState,
+  now: number,
+  lastCheck: number,
+  options: ShouldCheckOptions = {},
+): boolean {
+  if (state.phase === "unsupported") {
+    return options.userInitiated === true && options.environmentSupportsUpdates === true;
+  }
   if (state.phase !== "idle" && state.phase !== "error") return false;
   return now - lastCheck >= MIN_CHECK_INTERVAL_MS || lastCheck === 0;
 }
@@ -307,12 +331,28 @@ export class DesktopUpdateController {
   }
 
   private async runCheck() {
+    const checkOptions = {
+      userInitiated: this.checkWasRequested,
+      environmentSupportsUpdates: updaterSupport(this.environment).supported,
+    };
     let now = this.clock.now();
-    if (!shouldCheck(this.current, now, this.lastCheck)) return this.current;
+    if (!shouldCheck(this.current, now, this.lastCheck, checkOptions)) return this.current;
+    // A prior empty feed freezes automatic checks; a manual retry clears that freeze.
+    if (this.current.phase === "unsupported" && checkOptions.environmentSupportsUpdates) {
+      this.current = {
+        ...this.current,
+        phase: "idle",
+        availableVersion: null,
+        percent: null,
+        message: null,
+      };
+      // Do not make the user wait out the launch-check interval to retry.
+      this.lastCheck = 0;
+    }
     const updater = await this.updater();
     if (updater === null) return this.current;
     now = this.clock.now();
-    if (!shouldCheck(this.current, now, this.lastCheck)) return this.current;
+    if (!shouldCheck(this.current, now, this.lastCheck, checkOptions)) return this.current;
     this.lastCheck = now;
     try {
       await updater.checkForUpdates();

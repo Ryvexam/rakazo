@@ -152,6 +152,8 @@ jobs:
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=2 "$app"
           grep -Fqx "provider: github" "$app/Contents/Resources/app-update.yml"
+          grep -Fqx "owner: elie222" "$app/Contents/Resources/app-update.yml"
+          grep -Fqx "repo: rakazo" "$app/Contents/Resources/app-update.yml"
 
       - name: Require Windows signing credentials
         if: runner.os == 'Windows'
@@ -191,12 +193,33 @@ jobs:
           if (-not (Select-String -Path $config -Pattern '^publisherName:' -Quiet)) {
             throw "Windows update config is not bound to the signing publisher."
           }
+          foreach ($expected in @("provider: github", "owner: elie222", "repo: rakazo")) {
+            if (-not (Select-String -Path $config -Pattern "^$([regex]::Escape($expected))$" -Quiet)) {
+              throw "Windows update config missing '$expected'."
+            }
+          }
 
       - name: Package x64 Linux AppImage
         if: runner.os == 'Linux'
         run: >-
           pnpm --filter @rakazo/desktop exec electron-builder
           --linux --x64 --publish never
+      - name: Verify Linux update feed is pinned to the official GitHub channel
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="apps/desktop/out/linux-unpacked/resources/app-update.yml"
+          if [[ ! -f "$config" ]]; then
+            config="$(find apps/desktop/out -name app-update.yml -print -quit)"
+          fi
+          test -n "$config"
+          test -f "$config"
+          grep -Fqx "provider: github" "$config"
+          grep -Fqx "owner: elie222" "$config"
+          grep -Fqx "repo: rakazo" "$config"
+          test -f apps/desktop/out/latest-linux.yml
+          grep -Fqx "version: ${{ needs.validate.outputs.version }}" apps/desktop/out/latest-linux.yml
 
       - name: Retain installers and updater metadata
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

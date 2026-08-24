@@ -149,6 +149,23 @@ describe("reduceUpdateState", () => {
     expect(shouldCheck(state, 10_000_000, 0)).toBe(false);
   });
 
+  it("keeps a verified download when the updater emits a late failure", () => {
+    const ready = apply([
+      { type: "downloaded", version: "0.2.0" },
+      { type: "failed", error: new Error("socket hang up"), userInitiated: false },
+    ]);
+    expect(ready).toMatchObject({ phase: "ready", availableVersion: "0.2.0", percent: 100 });
+  });
+
+  it("does not let a stray check-start interrupt an in-flight download", () => {
+    const downloading = apply([
+      { type: "download-start" },
+      { type: "progress", percent: 40 },
+      { type: "check-start" },
+    ]);
+    expect(downloading).toMatchObject({ phase: "downloading", percent: 40 });
+  });
+
   it("says nothing about being offline unless the user asked", () => {
     const offline = new Error("getaddrinfo ENOTFOUND github.com");
     expect(apply([{ type: "failed", error: offline, userInitiated: false }]).message).toBeNull();
@@ -183,6 +200,25 @@ describe("shouldCheck", () => {
     ]) {
       expect(shouldCheck(state, 10_000_000, 0)).toBe(false);
     }
+  });
+
+  it("lets a manual check retry after an empty feed when the install supports updates", () => {
+    const absent = apply([
+      { type: "check-start" },
+      { type: "failed", error: new Error("HttpError: 404 Not Found"), userInitiated: false },
+    ]);
+    expect(
+      shouldCheck(absent, 1_000, 1_000, {
+        userInitiated: true,
+        environmentSupportsUpdates: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldCheck(absent, 1_000, 1_000, {
+        userInitiated: true,
+        environmentSupportsUpdates: false,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -301,5 +337,27 @@ describe("DesktopUpdateController", () => {
 
     await Promise.all([controller.install(), controller.install()]);
     expect(fake.updater.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a manual check escape a prior empty-feed freeze", async () => {
+    let fake: ReturnType<typeof fakeUpdater>;
+    fake = fakeUpdater({
+      checkForUpdates: vi.fn(async () => {
+        fake.emit("checking-for-update");
+        if (fake.updater.checkForUpdates.mock.calls.length === 1) {
+          fake.emit("error", new Error("HttpError: 404 Not Found"));
+        } else {
+          fake.emit("update-not-available");
+        }
+      }),
+    });
+    const controller = new DesktopUpdateController(packaged, async () => fake.updater, clock);
+
+    await controller.check(false);
+    expect(controller.state().phase).toBe("unsupported");
+
+    await controller.check(true);
+    expect(fake.updater.checkForUpdates).toHaveBeenCalledTimes(2);
+    expect(controller.state()).toMatchObject({ phase: "idle", message: null });
   });
 });
