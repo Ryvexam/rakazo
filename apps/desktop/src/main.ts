@@ -35,6 +35,8 @@ let currentTargetUrl: string | null = null;
 let setupError: string | null = null;
 let setupSaveInProgress = false;
 let openAppPromise: Promise<boolean> | null = null;
+/** Prior app window kept until setup is persisted (or the switch is abandoned). */
+let pendingPreviousWindow: BrowserWindow | null = null;
 let quitting = false;
 let warmWindowTimer: NodeJS.Timeout | undefined;
 const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.RAKAZO_WARM_WINDOW_TTL_MS);
@@ -409,15 +411,41 @@ async function openAppOnce(targetUrl: string) {
     await created.loaded;
     currentTargetUrl = targetUrl;
     setupError = null;
-    if (previous !== null && !previous.isDestroyed() && previous !== win) previous.destroy();
+    // Keep the previous window until the caller commits (after setup.json is written).
+    pendingPreviousWindow =
+      previous !== null && !previous.isDestroyed() && previous !== win ? previous : null;
+    if (pendingPreviousWindow !== null) pendingPreviousWindow.hide();
     return true;
   } catch (error) {
+    pendingPreviousWindow = null;
     if (win !== null && !win.isDestroyed()) win.destroy();
     // Keep the previous app window so Cancel / close can restore it.
     if (previous !== null && !previous.isDestroyed()) mainWindow = previous;
     showSetupWindow(`Could not open that server. ${probeFailureMessage(error)}`);
     return false;
   }
+}
+
+/** Drop the previous app window after the new server is opened and persisted. */
+function commitPendingAppSwitch() {
+  const previous = pendingPreviousWindow;
+  pendingPreviousWindow = null;
+  if (previous !== null && !previous.isDestroyed() && previous !== mainWindow) previous.destroy();
+}
+
+/**
+ * Undo an open that could not be persisted: destroy the new window, restore the
+ * prior session, and leave setup up so the error reply can be shown.
+ */
+function abandonPendingAppSwitch(previousSetup: DesktopSetup | null, previousUrl: string | null) {
+  const previous = pendingPreviousWindow;
+  pendingPreviousWindow = null;
+  const failed = mainWindow;
+  if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
+  if (previous !== null && !previous.isDestroyed()) mainWindow = previous;
+  else mainWindow = null;
+  currentSetup = previousSetup;
+  currentTargetUrl = previousUrl;
 }
 
 function destroySetupWindow() {
@@ -538,6 +566,7 @@ app.whenReady().then(async () => {
       return { ok: false, error: "A connection attempt is already running." };
     setupSaveInProgress = true;
     const previousSetup = currentSetup;
+    const previousUrl = currentTargetUrl;
     try {
       const setup = parseSetupInput(payload);
       if (setup === null) {
@@ -565,13 +594,13 @@ app.whenReady().then(async () => {
       try {
         await writeSetup(userDataDir, setup);
       } catch {
-        // The app window is already on the new server; keep currentSetup aligned with it.
-        destroySetupWindow();
+        abandonPendingAppSwitch(previousSetup, previousUrl);
         return {
           ok: false,
-          error: "Connected, but could not save setup for the next launch.",
+          error: "Could not save setup. The previous instance was restored.",
         };
       }
+      commitPendingAppSwitch();
       destroySetupWindow();
       return { ok: true };
     } finally {
@@ -583,6 +612,7 @@ app.whenReady().then(async () => {
     if (fromSetupWindow(event)) app.quit();
   });
 
+  // Register before startup awaits so macOS dock clicks during probe/open are handled.
   app.on("activate", () => {
     if (setupWindow !== null && !setupWindow.isDestroyed()) {
       setupWindow.show();
@@ -597,7 +627,10 @@ app.whenReady().then(async () => {
     }
     if (openAppPromise !== null) return;
     if (currentTargetUrl === null) showSetupWindow(setupError);
-    else void openApp(currentTargetUrl);
+    else
+      void openApp(currentTargetUrl).then((opened) => {
+        if (opened) commitPendingAppSwitch();
+      });
   });
 
   if (target.kind === "setup") {
@@ -605,12 +638,18 @@ app.whenReady().then(async () => {
   } else if (target.source === "saved") {
     const reachability = await probeServer(target.url);
     if (reachability.ok) {
-      if (await openApp(target.url)) destroySetupWindow();
+      if (await openApp(target.url)) {
+        commitPendingAppSwitch();
+        destroySetupWindow();
+      }
     } else {
       showSetupWindow(`Could not reconnect to the saved server. ${reachability.error}`);
     }
   } else {
-    if (await openApp(target.url)) destroySetupWindow();
+    if (await openApp(target.url)) {
+      commitPendingAppSwitch();
+      destroySetupWindow();
+    }
   }
 });
 
