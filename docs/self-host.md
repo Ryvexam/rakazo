@@ -287,10 +287,11 @@ restart it — so the work happens in a separate `updater` container that outliv
   Compose file through a root-equivalent Docker socket.
 
 Updates and rollbacks run one at a time. A failed pull leaves running services alone; a failed recreate restores the previous environment
-pin and attempts to redeploy the cached previous image. A failed fork build also resets the
-checkout to the pre-update commit so a later manual `--build` cannot deploy the rejected revision.
-Database migrations are not reversed. The sidecar never recreates itself, never touches Postgres or
-Caddy, and never runs migrations — that ordering belongs to the API start command.
+pin and attempts to redeploy the cached previous image. A failed fork build also restores the
+pre-update branch and commit (including when checkout succeeded but merge did not) so a later
+manual `--build` cannot deploy the rejected or unintended revision. Database migrations are not
+reversed. The sidecar never recreates itself, never touches Postgres or Caddy, and never runs
+migrations — that ordering belongs to the API start command.
 
 Only `https://` and `ssh://` git remotes are accepted. Merges are fast-forward only. A dirty or
 untracked source tree fails closed before anything runs (the application Dockerfile uses `COPY . .`).

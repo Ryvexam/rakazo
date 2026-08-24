@@ -21,6 +21,7 @@ import {
   IMAGE_TAG_ENV,
   imageRef,
   isGitCommit,
+  normalizeUpdateBranch,
   PREVIOUS_IMAGE_TAG_ENV,
   parseGitNameOnly,
   parseGitStatusPorcelain,
@@ -479,6 +480,7 @@ export function createUpdaterApp(
       originalPreviousTag: tags.previousTag,
       toTag: targetTag,
       fromCommit: checkout.commit,
+      fromBranch: checkout.branch,
       toCommit: targetCommit,
       restoreRemoteUrl:
         decision.strategy === "build" &&
@@ -510,6 +512,7 @@ export function createUpdaterApp(
       originalPreviousTag: tags.previousTag,
       toTag: decision.tag,
       fromCommit: checkout.commit,
+      fromBranch: checkout.branch,
       toCommit: null,
       restoreRemoteUrl: null,
       steps,
@@ -528,6 +531,7 @@ export function createUpdaterApp(
     originalPreviousTag: string | null;
     toTag: string | null;
     fromCommit: string | null;
+    fromBranch: string | null;
     toCommit: string | null;
     restoreRemoteUrl: string | null;
     steps: ComposeUpdateStep[];
@@ -553,17 +557,16 @@ export function createUpdaterApp(
       [IMAGE_TAG_ENV]: input.fromTag,
       [PREVIOUS_IMAGE_TAG_ENV]: input.originalPreviousTag ?? input.fromTag,
     };
-    // Build updates fast-forward the checkout before recreate. If anything after that fails, the
-    // finally block resets HEAD so a later manual `--build` cannot deploy the rejected revision.
-    let checkoutAdvanced = false;
+    // Build updates may switch branches and/or fast-forward before recreate. Mark the checkout
+    // touched as soon as either mutates so a mid-plan failure still restores branch + commit.
+    let checkoutTouched = false;
     try {
       const gitSteps = input.steps.filter((step) => step.command === "git");
       const composeSteps = input.steps.filter((step) => step.command !== "git");
 
       for (const step of gitSteps) {
         if (!(await runStep(record, step))) return record;
-        // checkout/merge move HEAD; mark before later git steps so a failed merge still restores.
-        if (step.id === "checkout" || step.id === "merge") checkoutAdvanced = true;
+        if (step.id === "checkout" || step.id === "merge") checkoutTouched = true;
       }
 
       // The build path only knows its tag after the fast-forward, because the tag is the commit.
@@ -634,7 +637,7 @@ export function createUpdaterApp(
     } finally {
       if (
         !record.ok &&
-        checkoutAdvanced &&
+        checkoutTouched &&
         input.fromCommit !== null &&
         isGitCommit(input.fromCommit)
       ) {
@@ -642,15 +645,15 @@ export function createUpdaterApp(
           record,
           {
             id: "restore-checkout",
-            label: "Restore the previous checkout commit",
+            label: "Restore the previous checkout",
             command: "git",
-            args: ["reset", "--hard", input.fromCommit],
+            args: restoreCheckoutArgv(input.fromBranch, input.fromCommit),
           },
           undefined,
           false,
         );
         if (!restored) {
-          record.restartAdvice = `${record.restartAdvice} The previous checkout commit also could not be restored; fix it before retrying.`;
+          record.restartAdvice = `${record.restartAdvice} The previous checkout also could not be restored; fix it before retrying.`;
         }
       }
       if (!record.ok && input.restoreRemoteUrl !== null) {
@@ -727,6 +730,20 @@ function startUpdater() {
   return serve({ fetch: app.fetch, hostname: config.host, port: config.port }, () => {
     console.log(`rakazo updater on http://${config.host}:${config.port} for ${config.deployDir}`);
   });
+}
+
+/**
+ * Put the worktree back on the pre-update branch and commit. `checkout -B` is required (not only
+ * `reset --hard`) so a failed plan that already switched branches cannot leave the wrong branch
+ * tip pointed at the pre-update commit, or leave the operator on the update target branch.
+ */
+export function restoreCheckoutArgv(fromBranch: string | null, fromCommit: string): string[] {
+  if (!isGitCommit(fromCommit)) throw new Error("Checkout restore needs a resolved commit.");
+  if (fromBranch !== null && fromBranch !== "HEAD") {
+    const branch = normalizeUpdateBranch(fromBranch);
+    if (!("error" in branch)) return ["checkout", "-B", branch.branch, fromCommit];
+  }
+  return ["reset", "--hard", fromCommit];
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
