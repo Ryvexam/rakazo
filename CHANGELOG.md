@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Model picker: bump Pi to 0.84.3 so Settings → Models includes current xAI and OpenCode Go ids (Grok 4.6, Ox Alpha Free, GLM-5.3).
+
 ### Added
 
 - Voice mode: speak replies, hold-to-talk dictation, and half-duplex calls. Speech sits behind a `VoiceProvider` interface (ElevenLabs, OpenAI, Cartesia) so the product is not tied to one vendor. Keys stay on the server.
