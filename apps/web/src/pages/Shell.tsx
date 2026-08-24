@@ -1428,7 +1428,7 @@ export function ShellPage() {
                     <div className="flex items-baseline justify-between gap-2">
                       <span
                         dir="auto"
-                        className={`text-[15px] text-[#ECECEE] ${
+                        className={`min-w-0 truncate text-[15px] text-[#ECECEE] ${
                           group.unread ? "font-semibold" : "font-medium"
                         }`}
                       >
