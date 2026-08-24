@@ -565,7 +565,6 @@ export const DeploymentSettingsSchema = z.object({
   canChooseHostComputer: z.boolean(),
 });
 
-
 export const ServerUpdateSourceSchema = z.object({
   repoUrl: z.string().max(400),
   branch: z.string().max(200),
