@@ -127,6 +127,26 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     });
   });
 
+  it("does not create outside directories through a parent symlink", async () => {
+    const { root, desktop, computer } = await fixture("parent-link-nested");
+    const outside = path.join(root, "outside-directory");
+    await mkdir(outside);
+    await symlink(outside, path.join(computer.providerRef, "escape-directory"), "junction");
+
+    await expect(
+      desktop.writeFile(computer, {
+        path: "escape-directory/nested/outside.txt",
+        content: new TextEncoder().encode("after"),
+      }),
+    ).rejects.toThrow();
+    await expect(readFile(path.join(outside, "nested/outside.txt"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(readFile(path.join(outside, "nested"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
   it("does not write outside when a validated parent is replaced before open", async () => {
     const { root, desktop, computer } = await fixture("parent-swap");
     const parent = path.join(computer.providerRef, "notes");
@@ -153,6 +173,33 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     expect(swapped).toBe(true);
     expect(await readFile(path.join(outside, "result.txt"), "utf8")).toBe("outside-before");
     expect(await readFile(path.join(displaced, "result.txt"), "utf8")).toBe("inside-before");
+  });
+
+  it("does not leave an outside file when exclusive create races through a swapped parent", async () => {
+    const { root, desktop, computer } = await fixture("parent-swap-create");
+    const parent = path.join(computer.providerRef, "notes");
+    const displaced = path.join(computer.providerRef, "notes-original");
+    const outside = path.join(root, "outside-directory");
+    await mkdir(parent);
+    await mkdir(outside);
+    let swapped = false;
+    lstatRace.afterRealpath = async (inspected) => {
+      if (swapped || path.resolve(inspected) !== parent) return;
+      swapped = true;
+      await rename(parent, displaced);
+      await symlink(outside, parent, "junction");
+    };
+
+    await expect(
+      desktop.writeFile(computer, {
+        path: "notes/result.txt",
+        content: new TextEncoder().encode("after"),
+      }),
+    ).rejects.toThrow();
+    expect(swapped).toBe(true);
+    await expect(readFile(path.join(outside, "result.txt"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
   it("rejects a hard link whose other name is outside the workspace", async () => {

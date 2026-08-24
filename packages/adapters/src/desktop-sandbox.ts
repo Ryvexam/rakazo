@@ -297,12 +297,10 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
   const candidate = path.resolve(home, normalized);
   if (!isAllowedDesktopPath(candidate, [home]))
     throw new Error("Path escapes the computer workspace");
+  const resolvedHome = await realpath(home);
   if (!mustExist) {
-    // Create each parent component under a realpath-checked path so a concurrent
-    // symlink/junction swap cannot mkdir outside the workspace before we notice.
-    const resolvedHome = await realpath(home);
-    if (!isAllowedDesktopPath(resolvedHome, [home]))
-      throw new Error("Path escapes the computer workspace");
+    // Create each parent under a realpath-checked prefix so a symlink/junction
+    // swap cannot mkdir outside the workspace before containment is checked.
     const segments = normalized.split(/[/\\]/u).filter(Boolean);
     let current = resolvedHome;
     for (const segment of segments.slice(0, -1)) {
@@ -313,14 +311,18 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
         if (!hasErrorCode(error, "EEXIST")) throw error;
       }
       const resolved = await realpath(next);
-      if (!isAllowedDesktopPath(resolved, [resolvedHome]))
+      if (
+        !isAllowedDesktopPath(resolved, [resolvedHome]) ||
+        !(await stat(resolved)).isDirectory()
+      ) {
         throw new Error("Path escapes the computer workspace");
+      }
       current = resolved;
     }
     return path.join(current, segments.at(-1) ?? "");
   }
   const resolved = await realpath(candidate);
-  if (!isAllowedDesktopPath(resolved, [home]))
+  if (!isAllowedDesktopPath(resolved, [resolvedHome]))
     throw new Error("Path escapes the computer workspace");
   return resolved;
 }
@@ -347,6 +349,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
     const opened = await handle.stat({ bigint: true });
     const named = await lstat(target, { bigint: true });
     const resolved = await realpath(target);
+    const resolvedHome = await realpath(home);
     if (
       !opened.isFile() ||
       !named.isFile() ||
@@ -355,7 +358,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
       opened.ino !== named.ino ||
       opened.nlink !== 1n ||
       named.nlink !== 1n ||
-      !isAllowedDesktopPath(resolved, [home])
+      !isAllowedDesktopPath(resolved, [resolvedHome])
     ) {
       throw new Error("Path escapes the computer workspace");
     }
