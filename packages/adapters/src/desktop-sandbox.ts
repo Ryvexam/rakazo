@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:fs";
-import { mkdir, open, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import type {
   AdapterContext,
@@ -23,6 +33,9 @@ import {
   normalizeWorkspacePath,
   placeholderObservation,
 } from "./computer-support.js";
+import { isAllowedDesktopPath, normalizeDesktopWorkspacePath } from "./desktop-sandbox-paths.js";
+
+const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 interface DesktopBox {
   ref: ComputerRef;
@@ -100,7 +113,7 @@ export class DesktopSandboxProvider implements SandboxProvider {
       return;
     }
     const cwd = resolveExecuteCwd(request.cwd, box.home);
-    if (!allowedPath(cwd, this.allowedRoots(box.home))) {
+    if (!isAllowedDesktopPath(cwd, this.allowedRoots(box.home))) {
       yield { type: "stderr", data: "path is outside this computer's home" };
       yield { type: "exit", code: 1 };
       return;
@@ -201,12 +214,13 @@ export class DesktopSandboxProvider implements SandboxProvider {
     const box = this.requiredBox(computer);
     const target = await localWorkspaceTarget(box.home, file.path, false);
     await mkdir(path.dirname(target), { recursive: true });
-    const handle = await open(
+    const handle = await openContainedWorkspaceFile(
+      box.home,
       target,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
       file.executable ? 0o700 : 0o600,
     );
     try {
+      await handle.truncate(0);
       await handle.writeFile(file.content);
       if (file.executable) await handle.chmod(0o700);
     } finally {
@@ -279,20 +293,65 @@ export class DesktopSandboxProvider implements SandboxProvider {
 }
 
 async function localWorkspaceTarget(home: string, relative: string, mustExist: boolean) {
-  const normalized = normalizeWorkspacePath(relative);
+  const normalized = normalizeDesktopWorkspacePath(relative);
   const candidate = path.resolve(home, normalized);
-  if (!allowedPath(candidate, [home])) throw new Error("Path escapes the computer workspace");
+  if (!isAllowedDesktopPath(candidate, [home]))
+    throw new Error("Path escapes the computer workspace");
   if (!mustExist) {
     const parent = path.dirname(candidate);
     await mkdir(parent, { recursive: true });
     const resolvedParent = await realpath(parent);
-    if (!allowedPath(resolvedParent, [home]))
+    if (!isAllowedDesktopPath(resolvedParent, [home]))
       throw new Error("Path escapes the computer workspace");
     return path.join(resolvedParent, path.basename(candidate));
   }
   const resolved = await realpath(candidate);
-  if (!allowedPath(resolved, [home])) throw new Error("Path escapes the computer workspace");
+  if (!isAllowedDesktopPath(resolved, [home]))
+    throw new Error("Path escapes the computer workspace");
   return resolved;
+}
+
+async function openContainedWorkspaceFile(home: string, target: string, mode: number) {
+  let handle: Awaited<ReturnType<typeof open>>;
+  try {
+    // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
+    // Validation below binds the write to this handle before any content is changed.
+    handle = await open(target, constants.O_WRONLY | O_NOFOLLOW);
+  } catch (error) {
+    if (!hasErrorCode(error, "ENOENT")) throw error;
+    // Exclusive creation fails closed if a final link or file appears concurrently.
+    handle = await open(
+      target,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
+      mode,
+    );
+  }
+
+  try {
+    const opened = await handle.stat({ bigint: true });
+    const named = await lstat(target, { bigint: true });
+    const resolved = await realpath(target);
+    if (
+      !opened.isFile() ||
+      !named.isFile() ||
+      named.isSymbolicLink() ||
+      opened.dev !== named.dev ||
+      opened.ino !== named.ino ||
+      opened.nlink !== 1n ||
+      named.nlink !== 1n ||
+      !isAllowedDesktopPath(resolved, [home])
+    ) {
+      throw new Error("Path escapes the computer workspace");
+    }
+    return handle;
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+function hasErrorCode(error: unknown, code: string): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === code;
 }
 
 async function* walkDesktopWorkspace(home: string, directory: string): AsyncIterable<PortableFile> {
@@ -316,14 +375,6 @@ async function* walkDesktopWorkspace(home: string, directory: string): AsyncIter
 function resolveExecuteCwd(requestCwd: string | undefined, home: string) {
   if (!requestCwd || requestCwd === "/home/rakazo" || requestCwd === "/home/user") return home;
   return path.resolve(home, requestCwd);
-}
-
-function allowedPath(target: string, roots: string[]) {
-  const resolved = path.resolve(target);
-  return roots.some((root) => {
-    const base = path.resolve(root);
-    return resolved === base || resolved.startsWith(base + path.sep);
-  });
 }
 
 function runCommand(
