@@ -1,3 +1,5 @@
+import { Cron } from "croner";
+
 const WEEKDAYS = "1-5";
 
 export const CRON_FREQS = [
@@ -133,85 +135,25 @@ export function formatCron(cron: string): string {
 }
 
 export function nextCronDate(cron: string, from: Date, timezone = "UTC"): Date {
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length < 5) {
-    return new Date(from.getTime() + 60_000);
+  if (cron.trim().split(/\s+/).length !== 5) {
+    throw new RangeError("Cron expressions must contain five fields");
   }
-  const [minuteExpr, hourExpr, , , dowExpr] = parts;
-  const candidate = new Date(from.getTime() + 60_000);
-  candidate.setSeconds(0, 0);
-  // Scan up to 8 days so any weekly day-of-week is reachable; evaluate the
-  // cron fields in the routine's timezone instead of silently using UTC.
-  let formatter: Intl.DateTimeFormat;
-  try {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      minute: "numeric",
-      hour: "numeric",
-      weekday: "short",
-      hour12: false,
-    });
-  } catch {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "UTC",
-      minute: "numeric",
-      hour: "numeric",
-      weekday: "short",
-      hour12: false,
-    });
-  }
-  const weekdayIndex: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  for (let i = 0; i < 8 * 24 * 60 + 2; i += 1) {
-    const fields = formatter.formatToParts(candidate);
-    const num = (type: string) => Number(fields.find((part) => part.type === type)?.value ?? "0");
-    const weekdayPart = fields.find((part) => part.type === "weekday")?.value ?? "Sun";
-    const minute = num("minute");
-    const hour = num("hour") % 24;
-    const weekday = weekdayIndex[weekdayPart] ?? 0;
-    if (
-      matchField(minuteExpr ?? "*", minute, 0, 59) &&
-      matchField(hourExpr ?? "*", hour, 0, 23) &&
-      matchDayOfWeek(dowExpr ?? "*", weekday)
-    ) {
-      return candidate;
-    }
-    candidate.setUTCMinutes(candidate.getUTCMinutes() + 1);
-  }
-  return new Date(from.getTime() + 60_000);
+  const schedule = new Cron(cron, {
+    paused: true,
+    timezone: validTimezoneOrUtc(timezone),
+  });
+  const next = schedule.nextRun(from);
+  if (!next) throw new RangeError(`Cron expression has no future run: ${cron}`);
+  return next;
 }
 
-// Day-of-week matching where 7 is a Sunday alias for 0. Supported inside
-// plain values, comma lists, and ranges (a range ending in 7 wraps: 5-7
-// means Fri, Sat, Sun).
-function matchDayOfWeek(expr: string, weekday: number): boolean {
-  if (expr === "*") return true;
-  return expr.split(",").some((item) => {
-    const token = item.trim();
-    if (token === "*") return true;
-    if (token.includes("-")) {
-      const [rawStart, rawEnd] = token.split("-");
-      let start = Number(rawStart);
-      let end = Number(rawEnd);
-      if (start === 7) start = 0;
-      if (end === 7) end = 0;
-      if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-      return start <= end ? weekday >= start && weekday <= end : weekday >= start || weekday <= end;
-    }
-    if (token.startsWith("*/")) {
-      const step = Number(token.slice(2));
-      return Number.isFinite(step) && step > 0 && weekday % step === 0;
-    }
-    const value = Number(token);
-    return value === weekday || (value === 7 && weekday === 0);
-  });
+function validTimezoneOrUtc(timezone: string): string {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
+    return timezone;
+  } catch {
+    return "UTC";
+  }
 }
 
 function parseClock(time: string): { hour: number; minute: number } {
@@ -238,20 +180,4 @@ function stepValue(expr: string): number | null {
 
 function isInt(expr: string): boolean {
   return /^\d+$/.test(expr);
-}
-
-function matchField(expr: string, value: number, min: number, max: number): boolean {
-  if (expr === "*") return true;
-  if (expr.startsWith("*/")) {
-    const step = Number(expr.slice(2));
-    return Number.isFinite(step) && step > 0 && value % step === 0;
-  }
-  if (expr.includes("-")) {
-    const [a, b] = expr.split("-").map(Number);
-    return value >= (a ?? min) && value <= (b ?? max);
-  }
-  if (expr.includes(",")) {
-    return expr.split(",").map(Number).includes(value);
-  }
-  return Number(expr) === value;
 }

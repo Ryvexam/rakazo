@@ -125,6 +125,13 @@ describe("nextCronDate", () => {
     expect(nextCronDate("0 9 * * 1,7", from)).toEqual(new Date("2026-08-30T09:00:00.000Z"));
     // 5-7 = Friday, Saturday, Sunday -> next is Friday Aug 28.
     expect(nextCronDate("0 9 * * 5-7", from)).toEqual(new Date("2026-08-28T09:00:00.000Z"));
+    expect(nextCronDate("0 9 * * 0-7", from)).toEqual(new Date("2026-08-27T09:00:00.000Z"));
+  });
+
+  it("honors day-of-month and month fields", () => {
+    const from = new Date("2026-08-24T10:30:00.000Z");
+    expect(nextCronDate("0 9 1 * *", from)).toEqual(new Date("2026-09-01T09:00:00.000Z"));
+    expect(nextCronDate("0 9 1 10 *", from)).toEqual(new Date("2026-10-01T09:00:00.000Z"));
   });
 
   it("evaluates the schedule in the routine timezone", () => {
@@ -141,5 +148,19 @@ describe("nextCronDate", () => {
     expect(nextCronDate("0 7 * * *", from, "Mars/Olympus")).toEqual(
       new Date("2026-08-25T07:00:00.000Z"),
     );
+  });
+
+  it("keeps the local hour across daylight saving time", () => {
+    const from = new Date("2026-03-07T12:01:00.000Z");
+    expect(nextCronDate("0 7 * * *", from, "America/New_York")).toEqual(
+      new Date("2026-03-08T11:00:00.000Z"),
+    );
+  });
+
+  it("rejects malformed expressions instead of scheduling one minute later", () => {
+    const from = new Date("2026-08-24T10:00:00.000Z");
+    expect(() => nextCronDate("61 25 * * *", from)).toThrow();
+    expect(() => nextCronDate("not-a-cron", from)).toThrow();
+    expect(() => nextCronDate("0 0 9 * * *", from)).toThrow();
   });
 });
