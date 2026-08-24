@@ -583,19 +583,6 @@ app.whenReady().then(async () => {
     if (fromSetupWindow(event)) app.quit();
   });
 
-  if (target.kind === "setup") {
-    showSetupWindow();
-  } else if (target.source === "saved") {
-    const reachability = await probeServer(target.url);
-    if (reachability.ok) {
-      if (await openApp(target.url)) destroySetupWindow();
-    } else {
-      showSetupWindow(`Could not reconnect to the saved server. ${reachability.error}`);
-    }
-  } else {
-    if (await openApp(target.url)) destroySetupWindow();
-  }
-
   app.on("activate", () => {
     if (setupWindow !== null && !setupWindow.isDestroyed()) {
       setupWindow.show();
@@ -612,6 +599,19 @@ app.whenReady().then(async () => {
     if (currentTargetUrl === null) showSetupWindow(setupError);
     else void openApp(currentTargetUrl);
   });
+
+  if (target.kind === "setup") {
+    showSetupWindow();
+  } else if (target.source === "saved") {
+    const reachability = await probeServer(target.url);
+    if (reachability.ok) {
+      if (await openApp(target.url)) destroySetupWindow();
+    } else {
+      showSetupWindow(`Could not reconnect to the saved server. ${reachability.error}`);
+    }
+  } else {
+    if (await openApp(target.url)) destroySetupWindow();
+  }
 });
 
 app.on("window-all-closed", () => {

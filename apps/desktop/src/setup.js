@@ -73,6 +73,10 @@
   });
 
   quitButton.addEventListener("click", () => {
+    if (bridge === undefined) {
+      window.close();
+      return;
+    }
     void bridge.quit();
   });
 

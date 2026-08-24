@@ -84,7 +84,7 @@ test("first run asks whether to use a local or existing instance", async () => {
   await expect(setup.locator("#local-url")).toHaveValue("http://127.0.0.1:5173");
   await expect(setup.locator("#panel-existing")).toBeHidden();
 
-  await setup.screenshot({ path: "e2e/screenshots/01-setup-new-instance.png" });
+  await setup.screenshot({ path: path.join(import.meta.dirname, "screenshots", "01-setup-new-instance.png") });
 });
 
 test("connecting to an existing instance verifies, saves, and opens it", async () => {
@@ -99,7 +99,7 @@ test("connecting to an existing instance verifies, saves, and opens it", async (
   await expect(setup.locator("#status")).toHaveText(`Rakazo answered at ${serverUrl}.`);
   await expect(setup.locator("#status")).toHaveAttribute("data-tone", "ok");
 
-  await setup.screenshot({ path: "e2e/screenshots/02-setup-existing-verified.png" });
+  await setup.screenshot({ path: path.join(import.meta.dirname, "screenshots", "02-setup-existing-verified.png") });
 
   const appWindow = await Promise.all([
     app.waitForEvent("window"),
@@ -107,7 +107,7 @@ test("connecting to an existing instance verifies, saves, and opens it", async (
   ]).then(([window]) => window);
 
   await expect(appWindow.getByText(APP_MARKER)).toBeVisible();
-  await appWindow.screenshot({ path: "e2e/screenshots/03-connected-instance.png" });
+  await appWindow.screenshot({ path: path.join(import.meta.dirname, "screenshots", "03-connected-instance.png") });
 
   const saved = JSON.parse(await readFile(path.join(userData, "setup.json"), "utf8"));
   expect(saved).toEqual({ mode: "existing", serverUrl });
@@ -146,7 +146,7 @@ test("an unreachable address is reported instead of being saved", async () => {
   await expect(async () => {
     await expect(readFile(path.join(userData, "setup.json"), "utf8")).rejects.toThrow();
   }).toPass();
-  await setup.screenshot({ path: "e2e/screenshots/04-setup-unreachable.png" });
+  await setup.screenshot({ path: path.join(import.meta.dirname, "screenshots", "04-setup-unreachable.png") });
 });
 
 test("a malformed address is rejected before anything is written", async () => {
@@ -237,7 +237,7 @@ test("an unreachable saved server falls back to setup with a recovery message", 
   await expect(setup.getByRole("radio", { name: /Existing instance/ })).toBeChecked();
   await expect(setup.locator("#server-url")).toHaveValue(closedUrl);
   await expect(setup.locator("#status")).toContainText("Could not reconnect to the saved server.");
-  await setup.screenshot({ path: "e2e/screenshots/05-saved-server-recovery.png" });
+  await setup.screenshot({ path: path.join(import.meta.dirname, "screenshots", "05-saved-server-recovery.png") });
 });
 
 test("the native application menu can reopen setup without exposing setup IPC to the server", async () => {
