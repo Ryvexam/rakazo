@@ -298,6 +298,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "attach_file") return `Attaching ${detail(record.path)}`;
   if (toolName === "open_path") return `Opening ${detail(record.path)}`;
   if (toolName === "render_plot") return "Rendering a chart";
+  if (toolName === "add_mcp_server") return `Connecting MCP server: ${detail(record.name)}`;
   if (toolName === "computer_observe") return "Looking at the screen";
   if (toolName === "computer_act") return "Operating the computer";
   if (toolName === "run_subagent") return `Delegating to helper: ${detail(record.name)}`;
@@ -457,7 +458,9 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         };
       }
       if (host.request.executeTool) {
-        const result = await host.request.executeTool(tool.name, args, executionId);
+        const result = tool.route
+          ? await host.request.executeTool(tool.name, args, executionId, tool.route)
+          : await host.request.executeTool(tool.name, args, executionId);
         if (isAgentToolExecutionResult(result)) return result;
         return {
           content: [{ type: "text", text: summarizeToolResult(result) }],
