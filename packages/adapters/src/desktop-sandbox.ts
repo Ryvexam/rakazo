@@ -9,6 +9,7 @@ import {
   realpath,
   rm,
   stat,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -213,7 +214,6 @@ export class DesktopSandboxProvider implements SandboxProvider {
   async writeFile(computer: ComputerRef, file: PortableFile) {
     const box = this.requiredBox(computer);
     const target = await localWorkspaceTarget(box.home, file.path, false);
-    await mkdir(path.dirname(target), { recursive: true });
     const handle = await openContainedWorkspaceFile(
       box.home,
       target,
@@ -298,12 +298,26 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
   if (!isAllowedDesktopPath(candidate, [home]))
     throw new Error("Path escapes the computer workspace");
   if (!mustExist) {
-    const parent = path.dirname(candidate);
-    await mkdir(parent, { recursive: true });
-    const resolvedParent = await realpath(parent);
-    if (!isAllowedDesktopPath(resolvedParent, [home]))
+    // Create each parent component under a realpath-checked path so a concurrent
+    // symlink/junction swap cannot mkdir outside the workspace before we notice.
+    const resolvedHome = await realpath(home);
+    if (!isAllowedDesktopPath(resolvedHome, [home]))
       throw new Error("Path escapes the computer workspace");
-    return path.join(resolvedParent, path.basename(candidate));
+    const segments = normalized.split(/[/\\]/u).filter(Boolean);
+    let current = resolvedHome;
+    for (const segment of segments.slice(0, -1)) {
+      const next = path.join(current, segment);
+      try {
+        await mkdir(next);
+      } catch (error) {
+        if (!hasErrorCode(error, "EEXIST")) throw error;
+      }
+      const resolved = await realpath(next);
+      if (!isAllowedDesktopPath(resolved, [resolvedHome]))
+        throw new Error("Path escapes the computer workspace");
+      current = resolved;
+    }
+    return path.join(current, segments.at(-1) ?? "");
   }
   const resolved = await realpath(candidate);
   if (!isAllowedDesktopPath(resolved, [home]))
@@ -313,6 +327,7 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
 
 async function openContainedWorkspaceFile(home: string, target: string, mode: number) {
   let handle: Awaited<ReturnType<typeof open>>;
+  let created = false;
   try {
     // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
     // Validation below binds the write to this handle before any content is changed.
@@ -325,6 +340,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
       mode,
     );
+    created = true;
   }
 
   try {
@@ -346,6 +362,8 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
     return handle;
   } catch (error) {
     await handle.close().catch(() => undefined);
+    // If exclusive create followed a swapped parent link, remove the empty outside file.
+    if (created) await unlink(target).catch(() => undefined);
     throw error;
   }
 }
