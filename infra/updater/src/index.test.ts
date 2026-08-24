@@ -203,6 +203,39 @@ describe("updater orchestration", () => {
     ]);
   });
 
+
+  it("resets the checkout when merge fails after a successful branch checkout", async () => {
+    const fixture = await deployment();
+    await mkdir(path.join(fixture.deployDir, ".git"));
+    const previousCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const calls: string[][] = [];
+    const run: UpdaterCommandRunner = async (_command, args) => {
+      calls.push(args);
+      const joined = args.join(" ");
+      if (joined === "rev-parse HEAD") return ok(previousCommit);
+      if (joined === "rev-parse --abbrev-ref HEAD") return ok("main");
+      if (joined === "remote get-url origin") return ok("https://github.com/example/fork");
+      if (args.includes("status") || joined === "ls-files --others --exclude-standard") return ok();
+      if (args.includes("ls-remote")) return ok(`${targetCommit}\trefs/heads/main\n`);
+      if (args[0] === "fetch" || args[0] === "checkout") return ok();
+      if (args[0] === "merge") return failed("not a fast-forward");
+      return ok();
+    };
+    const response = await request(createUpdaterApp(fixture.config, { run }), "/apply", {
+      repoUrl: "https://github.com/example/fork",
+      branch: "feature",
+    });
+    const record = (await response.json()) as ServerUpdateRun;
+    expect(record.ok).toBe(false);
+    expect(record.steps.map((step) => step.id)).toEqual([
+      "fetch",
+      "checkout",
+      "merge",
+      "restore-checkout",
+    ]);
+    expect(calls).toContainEqual(["reset", "--hard", previousCommit]);
+  });
+
   it("restores the prior image after a recreate fails health checks", async () => {
     const fixture = await deployment();
     const calls: Array<{ command: string; args: string[]; env?: Record<string, string> }> = [];

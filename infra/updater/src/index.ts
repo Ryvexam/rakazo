@@ -562,8 +562,9 @@ export function createUpdaterApp(
 
       for (const step of gitSteps) {
         if (!(await runStep(record, step))) return record;
+        // checkout/merge move HEAD; mark before later git steps so a failed merge still restores.
+        if (step.id === "checkout" || step.id === "merge") checkoutAdvanced = true;
       }
-      if (gitSteps.length > 0) checkoutAdvanced = true;
 
       // The build path only knows its tag after the fast-forward, because the tag is the commit.
       let toTag = input.toTag;
