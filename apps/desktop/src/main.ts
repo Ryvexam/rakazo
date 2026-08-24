@@ -143,7 +143,7 @@ function createWindow(url: string, partition: string | null) {
   win.webContents.once("did-finish-load", () => markOnce("rk:main:did-finish-load"));
   win.webContents.once("did-stop-loading", () => markOnce("rk:main:did-stop-loading"));
   markOnce("rk:main:load-url-start");
-  const loaded = win.loadURL(url).then(
+  const loaded = loadAppUrl(win, url).then(
     () => markOnce("rk:main:load-url-resolved"),
     (error: unknown) => {
       markOnce("rk:main:load-url-rejected");
@@ -151,6 +151,67 @@ function createWindow(url: string, partition: string | null) {
     },
   );
   return { loaded, win };
+}
+
+/**
+ * loadURL alone treats many HTTP error documents as success. Reject main-frame
+ * failures, renderer crashes during load, and HTTP 4xx/5xx main-frame responses.
+ */
+function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
+  const contents = win.webContents;
+  const targetSession = contents.session;
+  let mainStatus: number | undefined;
+
+  targetSession.webRequest.onCompleted({ urls: ["*://*/*"] }, (details) => {
+    if (details.webContentsId === contents.id && details.resourceType === "mainFrame") {
+      mainStatus = details.statusCode;
+    }
+  });
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const settle = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      contents.removeListener("did-fail-load", onFail);
+      contents.removeListener("render-process-gone", onGone);
+      targetSession.webRequest.onCompleted(null);
+      if (error) {
+        reject(error);
+        return;
+      }
+      if (mainStatus !== undefined && mainStatus >= 400) {
+        reject(new Error(`The server answered with HTTP ${mainStatus}.`));
+        return;
+      }
+      resolve();
+    };
+
+    const onFail = (
+      _event: Electron.Event,
+      _errorCode: number,
+      errorDescription: string,
+      _validatedURL: string,
+      isMainFrame: boolean,
+    ) => {
+      if (isMainFrame) settle(new Error(errorDescription || "Page failed to load."));
+    };
+    const onGone = (_event: Electron.Event, details: Electron.RenderProcessGoneDetails) => {
+      settle(new Error(`Renderer stopped (${details.reason}).`));
+    };
+
+    contents.on("did-fail-load", onFail);
+    contents.on("render-process-gone", onGone);
+    void contents.loadURL(url).then(
+      () => {
+        // onCompleted can lag loadURL's resolve by a tick.
+        setImmediate(() => settle());
+      },
+      (error: unknown) => {
+        settle(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }
 
 async function installBundledRenderer(
@@ -434,18 +495,24 @@ function commitPendingAppSwitch() {
 }
 
 /**
- * Undo an open that could not be persisted: destroy the new window, restore the
- * prior session, and leave setup up so the error reply can be shown.
+ * Undo an open that could not be persisted. When a prior session exists, restore
+ * it. On first run keep the connected window so the user can retry save.
  */
-function abandonPendingAppSwitch(previousSetup: DesktopSetup | null, previousUrl: string | null) {
+function abandonPendingAppSwitch(
+  previousSetup: DesktopSetup | null,
+  previousUrl: string | null,
+): "restored" | "kept" {
   const previous = pendingPreviousWindow;
   pendingPreviousWindow = null;
-  const failed = mainWindow;
-  if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
-  if (previous !== null && !previous.isDestroyed()) mainWindow = previous;
-  else mainWindow = null;
-  currentSetup = previousSetup;
-  currentTargetUrl = previousUrl;
+  if (previous !== null && !previous.isDestroyed()) {
+    const failed = mainWindow;
+    if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
+    mainWindow = previous;
+    currentSetup = previousSetup;
+    currentTargetUrl = previousUrl;
+    return "restored";
+  }
+  return "kept";
 }
 
 function destroySetupWindow() {
@@ -594,10 +661,13 @@ app.whenReady().then(async () => {
       try {
         await writeSetup(userDataDir, setup);
       } catch {
-        abandonPendingAppSwitch(previousSetup, previousUrl);
+        const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
         return {
           ok: false,
-          error: "Could not save setup. The previous instance was restored.",
+          error:
+            outcome === "restored"
+              ? "Could not save setup. The previous instance was restored."
+              : "Connected, but could not save setup for the next launch. Try Continue again.",
         };
       }
       commitPendingAppSwitch();
