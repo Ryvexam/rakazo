@@ -260,6 +260,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         provider,
         id,
         apiKey: resolved.oauth ? undefined : resolved.apiKey,
+        baseUrl: resolved.baseUrl,
         oauth: resolved.oauth
           ? { credential: resolved.oauth, persist: resolved.persistOAuth }
           : undefined,
@@ -1475,6 +1476,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 provider: credential?.provider ?? settings?.defaultModelProvider ?? "scripted",
                 id: credential?.defaultModel ?? settings?.defaultModelId ?? "scripted",
                 apiKey: resolved.oauth ? undefined : resolved.apiKey,
+                baseUrl: resolved.baseUrl,
                 oauth: resolved.oauth
                   ? { credential: resolved.oauth, persist: resolved.persistOAuth }
                   : undefined,
@@ -2140,6 +2142,7 @@ async function resolveModelKey(
   registerSecrets?: (values: string[]) => void,
 ): Promise<{
   apiKey?: string;
+  baseUrl?: string;
   oauth?: AgentModelOAuthCredential;
   persistOAuth?: (credential: AgentModelOAuthCredential) => Promise<void>;
   redact: string[];
@@ -2167,8 +2170,11 @@ async function resolveModelKey(
         persist,
       });
       const oauth = resolved.secret.kind === "oauth" ? resolved.secret.credential : undefined;
+      const baseUrl =
+        resolved.secret.kind === "openai_compatible" ? resolved.secret.baseUrl : undefined;
       return {
         apiKey: resolved.apiKey,
+        baseUrl,
         oauth,
         persistOAuth: oauth
           ? async (next) => {
