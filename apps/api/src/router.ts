@@ -1917,13 +1917,18 @@ export function createRouter(deps: RouterDeps) {
               });
               if (existing.secretId)
                 await tx.secret.deleteMany({
-                  where: { id: existing.secretId, workspaceId: context.actor.workspaceId },
+                  where: {
+                    id: existing.secretId,
+                    workspaceId: context.actor.workspaceId,
+                    userId: context.actor.userId,
+                  },
                 });
             } else if (clearing && existing.secretId) {
               await tx.secret.deleteMany({
                 where: {
                   id: existing.secretId,
                   workspaceId: context.actor.workspaceId,
+                  userId: context.actor.userId,
                 },
               });
             }
@@ -1945,7 +1950,15 @@ export function createRouter(deps: RouterDeps) {
           await deps.prisma.$transaction([
             deps.prisma.mcpServer.delete({ where: { id: server.id } }),
             ...(server.secretId
-              ? [deps.prisma.secret.delete({ where: { id: server.secretId } })]
+              ? [
+                  deps.prisma.secret.deleteMany({
+                    where: {
+                      id: server.secretId,
+                      workspaceId: context.actor.workspaceId,
+                      userId: context.actor.userId,
+                    },
+                  }),
+                ]
               : []),
           ]);
           return { ok: true as const };
