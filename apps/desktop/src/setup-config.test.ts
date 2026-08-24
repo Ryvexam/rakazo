@@ -42,6 +42,14 @@ describe("server address normalization", () => {
     expect(normalizeServerUrl("http://[fd00::1]:3100")).toBe("http://[fd00::1]:3100");
   });
 
+  it("rejects cleartext link-local addresses used by cloud metadata endpoints", () => {
+    expect(normalizeServerUrl("http://169.254.169.254")).toBeNull();
+    expect(normalizeServerUrl("http://169.254.1.1:80")).toBeNull();
+    expect(normalizeServerUrl("http://[fe80::1]:3100")).toBeNull();
+    // HTTPS to link-local still normalizes; the health probe must match Rakazo.
+    expect(normalizeServerUrl("https://169.254.169.254")).toBe("https://169.254.169.254");
+  });
+
   it.each(["", "   ", "not a url", "ftp://example.com", "file:///etc/passwd", "http://"])(
     "rejects an address that cannot reach a Rakazo server (%s)",
     (value) => {

@@ -96,49 +96,16 @@ function createWindow(url: string, partition: string | null) {
       return { action: "deny" };
     }
     const appOrigin = targetOrigin ?? safeOrigin(url);
+    const sameOrigin = appOrigin !== null && target.origin === appOrigin;
+    // Same-origin http(s) and third-party https (OAuth) get a framed popup.
     if (
-      target.protocol === "https:" ||
-      (target.protocol === "http:" && appOrigin !== null && target.origin === appOrigin)
+      (sameOrigin && (target.protocol === "http:" || target.protocol === "https:")) ||
+      (!sameOrigin && target.protocol === "https:")
     ) {
-      if (appOrigin !== null && target.origin === appOrigin) {
-        return {
-          action: "allow",
-          overrideBrowserWindowOptions: {
-            width: 560,
-            height: 720,
-            frame: true,
-            titleBarStyle: "default",
-            autoHideMenuBar: true,
-            backgroundColor: "#050506",
-            webPreferences: {
-              preload: "",
-              nodeIntegration: false,
-              contextIsolation: true,
-              sandbox: true,
-            },
-          },
-        };
-      }
-      // Third-party https (OAuth providers): allow a framed popup.
-      if (target.protocol === "https:") {
-        return {
-          action: "allow",
-          overrideBrowserWindowOptions: {
-            width: 560,
-            height: 720,
-            frame: true,
-            titleBarStyle: "default",
-            autoHideMenuBar: true,
-            backgroundColor: "#050506",
-            webPreferences: {
-              preload: "",
-              nodeIntegration: false,
-              contextIsolation: true,
-              sandbox: true,
-            },
-          },
-        };
-      }
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: oauthPopupWindowOptions(),
+      };
     }
     const external = safeExternalUrl(childUrl);
     if (external !== null) void shell.openExternal(external);
@@ -233,6 +200,23 @@ async function installBundledRenderer(
   markOnce("rk:main:bundled-renderer-ready");
 }
 
+function oauthPopupWindowOptions() {
+  return {
+    width: 560,
+    height: 720,
+    frame: true,
+    titleBarStyle: "default" as const,
+    autoHideMenuBar: true,
+    backgroundColor: "#050506",
+    webPreferences: {
+      preload: "",
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  };
+}
+
 function createSetupWindow() {
   const icon = developmentIcon();
   const win = new BrowserWindow({
@@ -249,17 +233,17 @@ function createSetupWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.once("closed", () => {
     if (setupWindow === win) setupWindow = null;
+    // Closing setup without saving restores a connected session (Change Server cancel).
+    restoreAppWindowAfterSetup();
   });
   void win.loadFile(path.join(import.meta.dirname, "setup.html"));
   markOnce("rk:main:setup-window-created");
   return win;
 }
 
+/** Hide the app while setup is open; do not clear the saved target until a new one opens. */
 function showSetupWindow(error: string | null = null) {
-  currentTargetUrl = null;
   setupError = error;
-  const appWindow = mainWindow;
-  mainWindow = null;
 
   let win: BrowserWindow;
   if (setupWindow !== null && !setupWindow.isDestroyed()) {
@@ -268,10 +252,19 @@ function showSetupWindow(error: string | null = null) {
   } else {
     win = createSetupWindow();
   }
-  if (appWindow !== null && !appWindow.isDestroyed()) appWindow.destroy();
+  if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.hide();
   win.show();
   win.focus();
   return win;
+}
+
+function restoreAppWindowAfterSetup() {
+  if (quitting) return;
+  if (setupWindow !== null && !setupWindow.isDestroyed()) return;
+  if (mainWindow === null || mainWindow.isDestroyed() || currentTargetUrl === null) return;
+  clearTimeout(warmWindowTimer);
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function installApplicationMenu() {
@@ -406,6 +399,7 @@ function openApp(targetUrl: string) {
 
 async function openAppOnce(targetUrl: string) {
   const target = sessionForTarget(targetUrl);
+  const previous = mainWindow;
   let win: BrowserWindow | null = null;
   try {
     await migrateDefaultSessionCookies(targetUrl, target.value, target.partition);
@@ -415,9 +409,12 @@ async function openAppOnce(targetUrl: string) {
     await created.loaded;
     currentTargetUrl = targetUrl;
     setupError = null;
+    if (previous !== null && !previous.isDestroyed() && previous !== win) previous.destroy();
     return true;
   } catch (error) {
     if (win !== null && !win.isDestroyed()) win.destroy();
+    // Keep the previous app window so Cancel / close can restore it.
+    if (previous !== null && !previous.isDestroyed()) mainWindow = previous;
     showSetupWindow(`Could not open that server. ${probeFailureMessage(error)}`);
     return false;
   }

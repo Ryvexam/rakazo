@@ -17,10 +17,7 @@
 
     <main class="shell">
       <h1 class="heading">Welcome to Rakazo</h1>
-      <p class="subheading">
-        Rakazo runs on a server that hosts your bots, memory, and computers. Choose how this desktop
-        app should connect.
-      </p>
+      <p class="subheading">Choose which server this app should use.</p>
 
       <form id="setup" class="card" novalidate>
         <fieldset class="choices">
@@ -29,31 +26,24 @@
           <label class="choice" for="mode-new">
             <input id="mode-new" type="radio" name="mode" value="new" checked />
             <span class="choice-body">
-              <span class="choice-title">Use an instance on this computer</span>
-              <span class="choice-note">
-                Use a Rakazo stack running on this computer. Best if you are self-hosting locally.
-              </span>
+              <span class="choice-title">This computer</span>
+              <span class="choice-note">Local Rakazo stack.</span>
             </span>
           </label>
 
           <label class="choice" for="mode-existing">
             <input id="mode-existing" type="radio" name="mode" value="existing" />
             <span class="choice-body">
-              <span class="choice-title">Connect to an existing instance</span>
-              <span class="choice-note">
-                Point at a Rakazo server you or your team already runs.
-              </span>
+              <span class="choice-title">Existing instance</span>
+              <span class="choice-note">A server you already run.</span>
             </span>
           </label>
         </fieldset>
 
         <section id="panel-new" class="panel">
-          <label class="field-label" for="local-url">Local server address</label>
+          <label class="field-label" for="local-url">Local address</label>
           <input id="local-url" class="field" type="text" spellcheck="false" autocomplete="off" />
-          <p class="hint">
-            Not running yet? Start the stack from your Rakazo checkout with
-            <code>pnpm dev</code>, then check again.
-          </p>
+          <p class="hint">If it isn’t running yet, start with <code>pnpm dev</code>.</p>
         </section>
 
         <section id="panel-existing" class="panel" hidden>
@@ -66,7 +56,7 @@
             autocomplete="off"
             placeholder="https://rakazo.example.com"
           />
-          <p class="hint">Use the address you open Rakazo with in a browser.</p>
+          <p class="hint">Same address you open in a browser.</p>
         </section>
 
         <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -77,9 +67,7 @@
         </div>
       </form>
 
-      <p class="footnote">
-        You can change this later from the Rakazo application menu (Command/Ctrl + Shift + K).
-      </p>
+      <p class="footnote">Change later from the Rakazo menu (⌘/Ctrl+Shift+K).</p>
     </main>
 
     <script src="setup.js"></script>

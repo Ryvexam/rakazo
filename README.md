@@ -89,12 +89,13 @@ pnpm --filter @rakazo/desktop dev
 
 On first run the desktop app asks whether to use the Rakazo stack on this computer
 (`http://127.0.0.1:5173`) or connect to an existing server. Public servers must use HTTPS; HTTP is
-accepted only for loopback and private-network addresses. The app verifies Rakazo's health endpoint
-before saving, and later launches go straight to that instance.
+accepted only for loopback and private LAN addresses (not link-local). The app verifies Rakazo's
+health endpoint before saving, and later launches go straight to that instance.
 
-Use **Change Rakazo Server…** in the application menu to reconnect. For development automation, set
-`RAKAZO_WEB_URL` to point the shell somewhere else without changing the saved instance, or
-`RAKAZO_FORCE_SETUP=1` to run setup again.
+Use **Change Rakazo Server…** in the application menu to reconnect. Closing that window without
+saving returns to the previous instance. For development automation, set `RAKAZO_WEB_URL` to point
+the shell somewhere else without changing the saved instance, or `RAKAZO_FORCE_SETUP=1` to run
+setup again.
 
 Mobile build and release instructions live in [docs/mobile-release.md](./docs/mobile-release.md).
 

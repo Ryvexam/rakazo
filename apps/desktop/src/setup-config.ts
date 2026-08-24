@@ -160,23 +160,42 @@ function isLoopbackHost(hostname: string) {
   return isIP(host) === 6 && host === "::1";
 }
 
+/**
+ * Link-local addresses (IPv4 169.254/16, IPv6 fe80::/10) often host cloud
+ * metadata endpoints. Cleartext HTTP to them is never a legitimate Rakazo
+ * deploy target, so they stay out of the private-network HTTP allowlist.
+ */
+function isLinkLocalHost(hostname: string) {
+  const host = unbracketedHost(hostname);
+  if (isIP(host) === 4) {
+    const [first, second] = host.split(".").map(Number);
+    return first === 169 && second === 254;
+  }
+  if (isIP(host) === 6) {
+    const first = host.split(":", 1)[0] ?? "";
+    return /^fe[89ab]/.test(first);
+  }
+  return false;
+}
+
 function isLocalNetworkHost(hostname: string) {
   const host = unbracketedHost(hostname);
   if (isLoopbackHost(host) || host.endsWith(".local")) return true;
+  if (isLinkLocalHost(host)) return false;
 
   if (isIP(host) === 4) {
     const [first, second] = host.split(".").map(Number);
     return (
       first === 10 ||
       (first === 172 && second !== undefined && second >= 16 && second <= 31) ||
-      (first === 192 && second === 168) ||
-      (first === 169 && second === 254)
+      (first === 192 && second === 168)
     );
   }
 
   if (isIP(host) === 6) {
     const first = host.split(":", 1)[0] ?? "";
-    return /^f[cd]/.test(first) || /^fe[89ab]/.test(first);
+    // Unique-local only (fc00::/7). Link-local is rejected above.
+    return /^f[cd]/.test(first);
   }
   return false;
 }
