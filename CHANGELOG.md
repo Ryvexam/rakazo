@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Model picker: bump Pi to 0.84.3 so Settings → Models includes current xAI and OpenCode Go ids (Grok 4.6, Ox Alpha Free, GLM-5.3).
+- Model picker includes Grok 4.6 (xAI) and Ox Alpha Free / GLM-5.3 (OpenCode Go).
 
 ### Added
 
