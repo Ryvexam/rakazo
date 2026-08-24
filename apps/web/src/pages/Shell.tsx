@@ -2025,9 +2025,6 @@ export function ShellPage() {
                             notify: true,
                           });
                         }
-                        if (activeBotId.current !== targetBotId) return;
-                        await refreshThread(targetBotId);
-                        if (activeBotId.current === targetBotId) setPanel("computer");
                       } catch (error) {
                         if (
                           routineSaveRequest.current !== saveRequest ||
@@ -2038,9 +2035,16 @@ export function ShellPage() {
                         setRoutineError(
                           error instanceof Error ? error.message : "Could not save routine",
                         );
+                        return;
                       } finally {
                         routineSavePending.current = false;
                         setSavingRoutine(false);
+                      }
+                      if (
+                        routineSaveRequest.current === saveRequest &&
+                        activeBotId.current === targetBotId
+                      ) {
+                        setPanel("computer");
                       }
                     }}
                     className="rounded-[11px] bg-[#F1F1EF] px-4 py-2 text-[#17171A] disabled:opacity-40"

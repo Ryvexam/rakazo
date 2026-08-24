@@ -89,6 +89,43 @@ test("invalid advanced cron is rejected without creating a routine", async ({ pa
   await captureScreenshot(page, testInfo, "invalid-cron-rejected");
 });
 
+test("a successful routine create is not reported as failed when refresh fails", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signup(page, `routine-refresh-${stamp}@rakazo.test`, "password12", "Routine Refresh");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+
+  await page.getByTitle("Agent computer").click();
+  await page.getByRole("button", { name: "+ New routine" }).click();
+  await page.locator("label:has-text('Name') input").fill("Persisted routine");
+  await page.locator("label:has-text('Instruction') textarea").fill("Run once each morning");
+
+  await page.route(
+    "**/rpc/routines/list",
+    (route) => route.fulfill({ status: 500, body: "refresh failed" }),
+    { times: 1 },
+  );
+  const createResponse = page.waitForResponse(
+    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
+  );
+  const failedRefresh = page.waitForResponse(
+    (response) => response.url().includes("/rpc/routines/list") && response.status() === 500,
+  );
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await createResponse;
+  await failedRefresh;
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "computer");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+
+  await page.unroute("**/rpc/routines/list");
+  const routines = await rpc<Routine[]>(page, "routines/list", { botId });
+  expect(routines).toHaveLength(1);
+  expect(routines[0]?.name).toBe("Persisted routine");
+});
+
 test("switching bots while a routine save is pending does not reopen stale state", async ({
   page,
 }) => {
