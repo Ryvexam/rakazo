@@ -238,6 +238,7 @@ export function ShellPage() {
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
   const routineSavePending = useRef(false);
+  const routineSaveRequest = useRef(0);
   const routineRunPending = useRef(false);
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -1198,7 +1199,10 @@ export function ShellPage() {
   }, [active?.id]);
 
   useEffect(() => {
-    if (panel !== "routine") setRoutineError(null);
+    if (panel !== "routine") {
+      routineSaveRequest.current += 1;
+      setRoutineError(null);
+    }
   }, [panel]);
 
   // The routine panel copies a routine's data into local draft state at click time
@@ -1992,6 +1996,7 @@ export function ShellPage() {
                       const targetBotId = active.id;
                       const targetRoutine = editingRoutine;
                       if (targetRoutine && targetRoutine.botId !== targetBotId) return;
+                      const saveRequest = ++routineSaveRequest.current;
                       routineSavePending.current = true;
                       setSavingRoutine(true);
                       setRoutineError(null);
@@ -2018,6 +2023,12 @@ export function ShellPage() {
                         await refreshThread(targetBotId);
                         if (activeBotId.current === targetBotId) setPanel("computer");
                       } catch (error) {
+                        if (
+                          routineSaveRequest.current !== saveRequest ||
+                          activeBotId.current !== targetBotId
+                        ) {
+                          return;
+                        }
                         setRoutineError(
                           error instanceof Error ? error.message : "Could not save routine",
                         );

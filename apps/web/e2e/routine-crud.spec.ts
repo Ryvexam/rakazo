@@ -142,12 +142,12 @@ test("switching bots while a routine save is pending does not reopen stale state
     async (route) => {
       sawUpdate();
       await updateReleased;
-      await route.continue();
+      await route.fulfill({ status: 500, body: "save failed" });
     },
     { times: 1 },
   );
-  const updateResponse = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/update") && response.ok(),
+  const updateResponse = page.waitForResponse((response) =>
+    response.url().includes("/rpc/routines/update"),
   );
 
   await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -163,6 +163,7 @@ test("switching bots while a routine save is pending does not reopen stale state
   releaseUpdate();
   await updateResponse;
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "closed");
+  await expect(page.getByRole("alert")).toHaveCount(0);
 
   await page.getByTitle("Agent computer").click();
   await expect(page.getByRole("button", { name: /Second routine/ })).toHaveCount(1);
