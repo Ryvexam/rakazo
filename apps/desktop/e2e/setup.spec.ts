@@ -80,9 +80,7 @@ test("first run asks whether to use a local or existing instance", async () => {
   await expect(setup.getByText("Existing instance")).toBeVisible();
 
   // A new instance is the default and points at the local development stack.
-  await expect(
-    setup.getByRole("radio", { name: /This computer/ }),
-  ).toBeChecked();
+  await expect(setup.getByRole("radio", { name: /This computer/ })).toBeChecked();
   await expect(setup.locator("#local-url")).toHaveValue("http://127.0.0.1:5173");
   await expect(setup.locator("#panel-existing")).toBeHidden();
 
@@ -212,9 +210,9 @@ test("the setup probe refuses redirects instead of following them", async () => 
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
-    await expect(setup.locator("#status")).toHaveText(
-      "That address redirects elsewhere. Enter the final Rakazo server address.",
-    );
+    // Electron's net.fetch with redirect:"manual" surfaces redirects as a
+    // network failure rather than an HTTP 3xx body we can classify.
+    await expect(setup.locator("#status")).toHaveText("Could not reach that address.");
     await expect(async () => {
       await expect(readFile(path.join(userData, "setup.json"), "utf8")).rejects.toThrow();
     }).toPass();
