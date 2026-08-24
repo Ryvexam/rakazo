@@ -235,6 +235,49 @@ describe("updater orchestration", () => {
     );
   });
 
+  it("resets a fork checkout when recreate fails after the fast-forward", async () => {
+    const fixture = await deployment("RAKAZO_IMAGE_TAG=local\n");
+    await mkdir(path.join(fixture.deployDir, ".git"));
+    const calls: string[][] = [];
+    let upCalls = 0;
+    const run: UpdaterCommandRunner = async (command, args) => {
+      calls.push(args);
+      const joined = args.join(" ");
+      if (joined === "rev-parse HEAD") {
+        // After the merge step the checkout is on the target; before that it is still current.
+        const merged = calls.some((seen) => seen[0] === "merge");
+        return ok(merged ? targetCommit : currentCommit);
+      }
+      if (joined === "rev-parse --abbrev-ref HEAD") return ok("main");
+      if (joined === "remote get-url origin") return ok("https://github.com/example/fork");
+      if (args.includes("status") || joined === "ls-files --others --exclude-standard") return ok();
+      if (args.includes("ls-remote")) return ok(`${targetCommit}\trefs/heads/main\n`);
+      if (command === "docker" && args.includes("up")) {
+        upCalls += 1;
+        return upCalls === 1 ? failed("api did not become healthy") : ok("restored");
+      }
+      return ok();
+    };
+    const response = await request(createUpdaterApp(fixture.config, { run }), "/apply", {
+      repoUrl: "https://github.com/example/fork",
+      branch: "main",
+    });
+    const record = (await response.json()) as ServerUpdateRun;
+    expect(record.ok).toBe(false);
+    expect(record.steps.map((step) => step.id)).toEqual([
+      "fetch",
+      "checkout",
+      "merge",
+      "recreate",
+      "recover",
+      "restore-checkout",
+    ]);
+    expect(calls).toContainEqual(["reset", "--hard", currentCommit]);
+    expect(await readFile(path.join(fixture.deployDir, ".env"), "utf8")).toContain(
+      "RAKAZO_IMAGE_TAG=local",
+    );
+  });
+
   it("rolls back from the cached image without trusting the registry tag again", async () => {
     const fixture = await deployment();
     const calls: string[][] = [];

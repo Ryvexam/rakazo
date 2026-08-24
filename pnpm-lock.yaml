@@ -397,9 +397,6 @@ importers:
       tsx:
         specifier: ^4.20.5
         version: 4.23.12
-      zod:
-        specifier: ^4.1.5
-        version: 4.4.3
     devDependencies:
       typescript:
         specifier: ^5.9.2

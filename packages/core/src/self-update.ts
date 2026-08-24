@@ -27,7 +27,7 @@ export type BranchResult = { branch: string } | { error: string };
  */
 export function normalizeRepoUrl(input: string): RepoUrlResult {
   const trimmed = input.trim();
-  if (trimmed === "") return { error: "Enter a repository URL." };
+  if (trimmed === "") return { error: "A repository URL is required." };
   if (trimmed.length > 400) return { error: "That repository URL is too long." };
   if (hasUnsafeCharacter(trimmed)) {
     return { error: "A repository URL cannot contain spaces or control characters." };
@@ -115,7 +115,7 @@ export function isOfficialRepoUrl(url: string): boolean {
 
 export function normalizeUpdateBranch(input: string): BranchResult {
   const branch = input.trim();
-  if (branch === "") return { error: "Enter a branch name." };
+  if (branch === "") return { error: "A branch name is required." };
   if (branch.length > 200) return { error: "That branch name is too long." };
   if (hasUnsafeCharacter(branch) || BRANCH_REJECT.test(branch)) {
     return { error: "That branch name has characters git rejects." };

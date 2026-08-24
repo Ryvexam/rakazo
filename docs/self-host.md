@@ -119,7 +119,10 @@ container logs, default no-new-privileges, and the kernel NAT path instead of Do
    whenever Cloudflare publishes a change. A Cloudflare Tunnel can replace the public web listeners.
 2. Clone the repository on the VM and create a root `.env` with production-only values. At minimum set
    `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `E2B_API_KEY`, `OPENROUTER_API_KEY`,
-   `RAKAZO_HOST`, and the three public origins. Use URL-safe random values for database credentials.
+   `RAKAZO_HOST`, the three public origins, `RAKAZO_DEPLOY_DIR`, and `RAKAZO_UPDATER_TOKEN`. Use
+   URL-safe random values for database credentials. The updater token must be a dedicated random
+   string (at least 32 characters) that differs from `BETTER_AUTH_SECRET` and
+   `SANDBOX_SUPERVISOR_TOKEN`; without it `up --wait` fails because the sidecar refuses to start.
 3. Keep registration allowlisted while the service is private:
 
 ```env
@@ -141,6 +144,8 @@ DATA_DIR=/data
 # that it does from your shell. See "The deploy directory must be one path" below.
 RAKAZO_DEPLOY_DIR=/srv/rakazo
 RAKAZO_IMAGE_TAG=local
+# Dedicated updater credential (not BETTER_AUTH_SECRET / SANDBOX_SUPERVISOR_TOKEN).
+RAKAZO_UPDATER_TOKEN=replace-with-32-plus-character-updater-token
 ```
 
 4. Build the images from your checkout and start the stack, then verify its public health endpoint:
@@ -209,13 +214,14 @@ docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
 
 `up --wait` does not report success until the new API is healthy and the worker and web containers
 are running. The API's start command runs `prisma migrate deploy` before it serves, so migration
-failure keeps health red. If a recreate fails, the updater redeploys the previously cached image;
-if that recovery also fails, it reports that the runtime may contain mixed versions and requires
-manual recovery.
+failure keeps health red. A failed CLI recreate does not auto-roll back; recover with the previous
+`RAKAZO_IMAGE_TAG` (or rebuild `local`) and `up -d --wait --pull never`.
 
 The updater sidecar has its own image and tag so an update never recreates the process performing
 it. Move it deliberately by setting `RAKAZO_UPDATER_IMAGE_TAG` to the full `sha-<commit>` tag, then
 running `docker compose … pull updater && docker compose … up -d --wait --pull never updater`.
+Sidecar `/apply` and `/rollback` recover a failed recreate by redeploying the previously cached
+image when possible; if that also fails, they report a possible mixed-version runtime.
 
 Source checkouts (not Compose) still upgrade the old way: pull, rebuild with
 `GIT_SHA=$(git rev-parse HEAD)`, run `pnpm --filter @rakazo/db migrate`, then restart API and worker.
@@ -240,7 +246,7 @@ your CI cannot publish into someone else's.
 | `local` | nothing — built locally by `up --build` | rebuilt in place |
 | `local-<full-commit>` | nothing — built on the server by a fork update | never |
 | `vX.Y.Z`, `vX.Y` | release tags | conventionally no / on patch releases |
-| `latest` | release tags | yes, to the newest release |
+| `latest` | stable `vX.Y.Z` tags only (not prereleases) | yes, to the newest stable release |
 | `sha-<full-commit>` | every push and manual run | source-addressed; used by the updater sidecar |
 | `edge` | pushes to main | yes, to the newest main build |
 
@@ -257,8 +263,9 @@ until the next update has been accepted. If it is missing, rollback fails closed
 new content under an old tag.
 
 To populate the registry the first time, run the workflow manually (`workflow_dispatch`) or push a
-`v*` tag. A manual run produces `sha-<full-commit>`; only a `v*` tag produces `latest` and semver
-tags. The updater ignores prereleases and refuses the official path until a stable `vX.Y.Z` exists.
+`v*` tag. A manual run produces `sha-<full-commit>`; only a stable `vX.Y.Z` tag (no prerelease
+suffix) produces `latest`, and any `v*` tag produces semver tags. The updater ignores prereleases
+and refuses the official path until a stable `vX.Y.Z` exists.
 
 ### Updater sidecar
 
@@ -279,10 +286,11 @@ restart it — so the work happens in a separate `updater` container that outliv
   than seconds. Point it only at a fork you control and have reviewed — the sidecar runs that
   Compose file through a root-equivalent Docker socket.
 
-Updates and rollbacks are serialized before preflight. A failed pull leaves running services alone;
-a failed recreate restores the previous environment pin and attempts to redeploy the cached previous
-image. Database migrations are not reversed. The sidecar never recreates itself, never touches
-Postgres or Caddy, and never runs migrations — that ordering belongs to the API start command.
+Updates and rollbacks run one at a time. A failed pull leaves running services alone; a failed recreate restores the previous environment
+pin and attempts to redeploy the cached previous image. A failed fork build also resets the
+checkout to the pre-update commit so a later manual `--build` cannot deploy the rejected revision.
+Database migrations are not reversed. The sidecar never recreates itself, never touches Postgres or
+Caddy, and never runs migrations — that ordering belongs to the API start command.
 
 Only `https://` and `ssh://` git remotes are accepted. Merges are fast-forward only. A dirty or
 untracked source tree fails closed before anything runs (the application Dockerfile uses `COPY . .`).

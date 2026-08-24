@@ -20,6 +20,7 @@ import {
   hasValidBearerToken,
   IMAGE_TAG_ENV,
   imageRef,
+  isGitCommit,
   PREVIOUS_IMAGE_TAG_ENV,
   parseGitNameOnly,
   parseGitStatusPorcelain,
@@ -50,7 +51,6 @@ const STEP_TIMEOUT_MS: Record<string, number> = {
   recover: 1_800_000,
 };
 const DEFAULT_TIMEOUT_MS = 120_000;
-const COMMIT = /^[0-9a-f]{40}$/;
 
 export interface CommandResult {
   ok: boolean;
@@ -402,7 +402,7 @@ export function createUpdaterApp(
       throw new UpdateRefused(`Could not read ${request.branch} from ${request.repoUrl}.`);
     }
     const commit = listed.output.trim().split(/\s/)[0] ?? "";
-    if (!COMMIT.test(commit)) {
+    if (!isGitCommit(commit)) {
       throw new UpdateRefused(`${request.repoUrl} has no branch called ${request.branch}.`);
     }
     return commit;
@@ -553,6 +553,9 @@ export function createUpdaterApp(
       [IMAGE_TAG_ENV]: input.fromTag,
       [PREVIOUS_IMAGE_TAG_ENV]: input.originalPreviousTag ?? input.fromTag,
     };
+    // Build updates fast-forward the checkout before recreate. If anything after that fails, the
+    // finally block resets HEAD so a later manual `--build` cannot deploy the rejected revision.
+    let checkoutAdvanced = false;
     try {
       const gitSteps = input.steps.filter((step) => step.command === "git");
       const composeSteps = input.steps.filter((step) => step.command !== "git");
@@ -560,13 +563,14 @@ export function createUpdaterApp(
       for (const step of gitSteps) {
         if (!(await runStep(record, step))) return record;
       }
+      if (gitSteps.length > 0) checkoutAdvanced = true;
 
       // The build path only knows its tag after the fast-forward, because the tag is the commit.
       let toTag = input.toTag;
       if (input.strategy === "build") {
         const head = await git(["rev-parse", "HEAD"]);
         const commit = head.ok ? head.output.trim() : "";
-        if (!COMMIT.test(commit)) {
+        if (!isGitCommit(commit)) {
           record.error = "Could not read the commit to build.";
           return record;
         }
@@ -627,6 +631,27 @@ export function createUpdaterApp(
       record.restart = "recreated";
       return record;
     } finally {
+      if (
+        !record.ok &&
+        checkoutAdvanced &&
+        input.fromCommit !== null &&
+        isGitCommit(input.fromCommit)
+      ) {
+        const restored = await runStep(
+          record,
+          {
+            id: "restore-checkout",
+            label: "Restore the previous checkout commit",
+            command: "git",
+            args: ["reset", "--hard", input.fromCommit],
+          },
+          undefined,
+          false,
+        );
+        if (!restored) {
+          record.restartAdvice = `${record.restartAdvice} The previous checkout commit also could not be restored; fix it before retrying.`;
+        }
+      }
       if (!record.ok && input.restoreRemoteUrl !== null) {
         const restored = await runStep(
           record,
