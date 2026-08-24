@@ -8,6 +8,7 @@ import {
   readFile,
   realpath,
   rm,
+  rmdir,
   stat,
   unlink,
   writeFile,
@@ -341,7 +342,7 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
           await parentHandle.close().catch(() => undefined);
           parentHandle = nextHandle;
         } catch (error) {
-          if (created) await rm(next, { recursive: true, force: true }).catch(() => undefined);
+          if (created) await rmdir(next).catch(() => undefined);
           throw error;
         }
       }
@@ -417,18 +418,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
     ) {
       throw new Error("Path escapes the computer workspace");
     }
-    if (!viaDirFd) {
-      // Bind containment to the opened inode so a path swap cannot validate a
-      // different inside path while the handle still refers outside.
-      const resolved = await realpath(path.join(containedParent, name));
-      if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
-        throw new Error("Path escapes the computer workspace");
-      }
-      const resolvedStat = await stat(resolved, { bigint: true });
-      if (resolvedStat.dev !== opened.dev || resolvedStat.ino !== opened.ino) {
-        throw new Error("Path escapes the computer workspace");
-      }
-    }
+    await assertContainedFileHandle(handle, resolvedHome, parentHandle, containedParent);
     return handle;
   } catch (error) {
     if (created && handle) {
@@ -464,24 +454,70 @@ async function assertContainedDirectoryHandle(
   ) {
     throw new Error("Path escapes the computer workspace");
   }
-  const resolved = await realpath(pathToRecheck);
-  if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+  // Prefer fd-bound realpath so containment cannot diverge from the open handle.
+  const resolved = await realpathFromFd(handle.fd);
+  if (resolved) {
+    if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+      throw new Error("Path escapes the computer workspace");
+    }
+    return resolved;
+  }
+  // Pathname platforms: re-open the realpath immediately and require the same inode.
+  const byPath = await realpath(pathToRecheck);
+  if (!isAllowedDesktopPath(byPath, [resolvedHome])) {
     throw new Error("Path escapes the computer workspace");
   }
-  const resolvedStat = await stat(resolved);
+  const verify = await open(byPath, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+  try {
+    const verified = await verify.stat();
+    if (!verified.isDirectory() || verified.dev !== after.dev || verified.ino !== after.ino) {
+      throw new Error("Path escapes the computer workspace");
+    }
+  } finally {
+    await verify.close().catch(() => undefined);
+  }
+  return byPath;
+}
+
+async function assertContainedFileHandle(
+  handle: Awaited<ReturnType<typeof open>>,
+  resolvedHome: string,
+  parentHandle: Awaited<ReturnType<typeof open>>,
+  parentPath: string,
+) {
+  const opened = await handle.stat({ bigint: true });
+  if (!opened.isFile() || opened.nlink !== 1n) {
+    throw new Error("Path escapes the computer workspace");
+  }
+  const resolved = await realpathFromFd(handle.fd);
+  if (resolved) {
+    if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+      throw new Error("Path escapes the computer workspace");
+    }
+    return;
+  }
+  // Pathname platforms: ensure the parent path still names the held parent inode.
+  // If it was swapped to a junction, the path inode diverges and we fail closed.
+  const parentOpened = await parentHandle.stat();
+  const parentNow = await stat(parentPath);
   if (
-    !resolvedStat.isDirectory() ||
-    resolvedStat.dev !== after.dev ||
-    resolvedStat.ino !== after.ino
+    !parentNow.isDirectory() ||
+    parentNow.dev !== parentOpened.dev ||
+    parentNow.ino !== parentOpened.ino ||
+    !isAllowedDesktopPath(await realpath(parentPath), [resolvedHome])
   ) {
     throw new Error("Path escapes the computer workspace");
   }
-  return resolved;
 }
 
 function childPathViaDirFd(fd: number, name: string) {
   if (process.platform === "linux") return `/proc/self/fd/${fd}/${name}`;
   return undefined;
+}
+
+async function realpathFromFd(fd: number) {
+  if (process.platform !== "linux") return undefined;
+  return realpath(`/proc/self/fd/${fd}`);
 }
 
 function hasErrorCode(error: unknown, code: string): error is NodeJS.ErrnoException {
