@@ -1851,7 +1851,7 @@ export function ShellPage() {
                     className="flex w-full items-center gap-3 rounded-[11px] px-2.5 py-2.5 hover:bg-[#121214]"
                   >
                     <span className="text-[#E65707]">◷</span>
-                    <span className="flex-1 text-start text-[14.5px] text-[#ECECEE]">
+                    <span className="flex-1 text-start text-[14.5px] text-[#ECECEE]" dir="auto">
                       {routine.name}
                     </span>
                     <span className="text-[13px] text-[#6C6C70]">{formatCron(routine.cron)}</span>
@@ -2998,7 +2998,9 @@ const MessageView = memo(function MessageView({
               className="w-[min(420px,90%)] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[15px] font-medium text-[#ECECEE]">{block.name}</span>
+                <span className="text-[15px] font-medium text-[#ECECEE]" dir="auto">
+                  {block.name}
+                </span>
                 <span
                   className="rounded-full px-[11px] py-1 text-[13px]"
                   style={{
@@ -3036,7 +3038,9 @@ const MessageView = memo(function MessageView({
               className="w-[min(340px,90%)] rounded-[18px] border border-[#232326] bg-[#17171A] px-[18px] py-4 text-start disabled:opacity-60"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[15px] font-medium text-[#ECECEE]">{block.name}</span>
+                <span className="text-[15px] font-medium text-[#ECECEE]" dir="auto">
+                  {block.name}
+                </span>
                 <span
                   className="rounded-full px-[11px] py-1 text-[13px]"
                   style={{
@@ -3051,7 +3055,7 @@ const MessageView = memo(function MessageView({
                       : "bot"}
                 </span>
               </div>
-              <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]">
+              <div className="mt-2 text-[14.5px] leading-[1.5] text-[#A8A8AD]" dir="auto">
                 {removed
                   ? block.status === "archived"
                     ? "Archived this bot. Its chat, memory, and files are preserved."

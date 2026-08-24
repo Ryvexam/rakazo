@@ -160,7 +160,7 @@ function MenuItem({
     >
       <span className="grid h-5 w-5 shrink-0 place-items-center">{icon}</span>
       <span dir="auto">{label}</span>
-      {endIcon ? <span className="ml-auto grid h-5 w-5 place-items-center">{endIcon}</span> : null}
+      {endIcon ? <span className="ms-auto grid h-5 w-5 place-items-center">{endIcon}</span> : null}
     </button>
   );
 }
