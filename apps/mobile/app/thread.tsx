@@ -745,6 +745,7 @@ export default function Thread() {
             borderRadius: 20,
             paddingHorizontal: 14,
             height: 44,
+            writingDirection: "auto",
           }}
         />
         <Pressable
