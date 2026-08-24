@@ -1463,7 +1463,10 @@ export function ShellPage() {
                 ? archivedBots.map((bot) => (
                     <div key={bot.id} className="flex items-center gap-2 rounded-lg px-2.5 py-2">
                       <BotAvatar color={bot.color} size={28} status={bot.status} />
-                      <span className="min-w-0 flex-1 truncate text-[14px] text-[#A8A8AD]" dir="auto">
+                      <span
+                        className="min-w-0 flex-1 truncate text-[14px] text-[#A8A8AD]"
+                        dir="auto"
+                      >
                         {bot.name}
                       </span>
                       <button
@@ -2557,7 +2560,9 @@ const Composer = memo(function Composer({
         <div className="mb-3 flex items-start justify-between gap-3 rounded-[14px] border border-[#26262A] bg-[#17171A] px-4 py-2 text-[13px] text-[#C9C9CE]">
           <div className="min-w-0">
             <div className="text-[#85858A]">Replying to</div>
-            <div dir="auto" className="truncate">{previewMessageText(replyTarget)}</div>
+            <div dir="auto" className="truncate">
+              {previewMessageText(replyTarget)}
+            </div>
           </div>
           <button
             type="button"
@@ -2590,7 +2595,9 @@ const Composer = memo(function Composer({
               ) : (
                 <Paperclip size={14} strokeWidth={1.8} />
               )}
-              <span className="max-w-[180px] truncate" dir="auto">{attachment.file.name}</span>
+              <span className="max-w-[180px] truncate" dir="auto">
+                {attachment.file.name}
+              </span>
               <button
                 type="button"
                 aria-label={`Remove ${attachment.file.name}`}
@@ -2845,7 +2852,10 @@ const MessageView = memo(function MessageView({
         </div>
       ) : null}
       {replyPreview ? (
-        <div className="mb-2 max-w-[74%] rounded-[14px] border border-[#26262A] bg-[#131315] px-3 py-2 text-[12.5px] text-[#85858A]" dir="auto">
+        <div
+          className="mb-2 max-w-[74%] rounded-[14px] border border-[#26262A] bg-[#131315] px-3 py-2 text-[12.5px] text-[#85858A]"
+          dir="auto"
+        >
           {previewMessageText(replyPreview)}
         </div>
       ) : null}
@@ -2856,7 +2866,10 @@ const MessageView = memo(function MessageView({
       <>
         {messageContext}
         <div className="flex justify-start">
-          <div className="max-w-[74%] space-y-2.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]" dir="auto">
+          <div
+            className="max-w-[74%] space-y-2.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]"
+            dir="auto"
+          >
             {message.blocks.map((block, i) => {
               if (block.kind === "steps") {
                 const isCurrentBlock = isLive && i === message.blocks.length - 1;
@@ -2925,7 +2938,10 @@ const MessageView = memo(function MessageView({
         if (block.kind === "progress") {
           return (
             <div key={i} className="flex justify-start">
-              <div className="max-w-[74%] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]" dir="auto">
+              <div
+                className="max-w-[74%] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]"
+                dir="auto"
+              >
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
             </div>
@@ -3083,7 +3099,10 @@ const MessageView = memo(function MessageView({
         if (block.kind === "text" && message.role === "user") {
           return (
             <div key={i} className="flex justify-end">
-              <div className="max-w-[70%] rounded-[20px] bg-[#F1F1EF] px-[18px] py-3 text-[15.5px] leading-[1.45] text-[#1A1A1A]" dir="auto">
+              <div
+                className="max-w-[70%] rounded-[20px] bg-[#F1F1EF] px-[18px] py-3 text-[15.5px] leading-[1.45] text-[#1A1A1A]"
+                dir="auto"
+              >
                 {block.text}
               </div>
             </div>
@@ -3092,7 +3111,10 @@ const MessageView = memo(function MessageView({
         if (block.kind === "text") {
           return (
             <div key={i} className="flex justify-start">
-              <div className="max-w-[74%] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]" dir="auto">
+              <div
+                className="max-w-[74%] rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]"
+                dir="auto"
+              >
                 <ChatMarkdown>{block.text}</ChatMarkdown>
                 {voiceReady ? (
                   <button

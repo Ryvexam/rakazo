@@ -25,7 +25,9 @@ export function WorkspaceSearchResults({
           className="rounded-xl px-2.5 py-[11px] text-start hover:bg-[#131315]"
         >
           <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[15px] font-medium text-[#ECECEE]" dir="auto">{hit.title}</span>
+            <span className="truncate text-[15px] font-medium text-[#ECECEE]" dir="auto">
+              {hit.title}
+            </span>
             <span className="shrink-0 text-[12px] uppercase tracking-wide text-[#6C6C70]">
               {hit.kind}
             </span>

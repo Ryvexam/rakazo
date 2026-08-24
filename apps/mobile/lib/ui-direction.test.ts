@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyMobileUiDirection, resolveMobileUiLocale } from "./ui-direction";
 
 vi.mock("react-native", () => ({
@@ -10,8 +10,18 @@ vi.mock("react-native", () => ({
 }));
 
 describe("mobile ui direction", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("resolves a locale tag from Intl", () => {
-    expect(resolveMobileUiLocale()).toMatch(/^[a-z]{2}(-[A-Z]{2})?$/i);
+    const resolvedOptions = vi.fn().mockReturnValue({ locale: "he-IL" });
+    vi.stubGlobal("Intl", {
+      ...Intl,
+      DateTimeFormat: vi.fn().mockImplementation(() => ({ resolvedOptions })),
+    });
+
+    expect(resolveMobileUiLocale()).toBe("he-IL");
   });
 
   it("forces rtl layout for Hebrew", async () => {
