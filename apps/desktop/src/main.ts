@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DesktopReachability, DesktopSetup } from "@rakazo/contracts";
 import { app, BrowserWindow, ipcMain, Menu, net, type Session, session, shell } from "electron";
@@ -408,20 +408,62 @@ async function openAppOnce(targetUrl: string) {
   const target = sessionForTarget(targetUrl);
   let win: BrowserWindow | null = null;
   try {
+    await migrateDefaultSessionCookies(targetUrl, target.value, target.partition);
     await installBundledRenderer(targetUrl, target.value, target.partition);
     const created = createWindow(targetUrl, target.partition);
     win = created.win;
     await created.loaded;
     currentTargetUrl = targetUrl;
     setupError = null;
-    const setup = setupWindow;
-    setupWindow = null;
-    if (setup !== null && !setup.isDestroyed()) setup.destroy();
     return true;
   } catch (error) {
     if (win !== null && !win.isDestroyed()) win.destroy();
     showSetupWindow(`Could not open that server. ${probeFailureMessage(error)}`);
     return false;
+  }
+}
+
+function destroySetupWindow() {
+  const setup = setupWindow;
+  setupWindow = null;
+  if (setup !== null && !setup.isDestroyed()) setup.destroy();
+}
+
+/**
+ * First launch after this feature may still have auth cookies in the default session
+ * (pre-partition installs). Copy matching origin cookies into the per-origin partition once.
+ */
+async function migrateDefaultSessionCookies(
+  targetUrl: string,
+  targetSession: Session,
+  partition: string | null,
+) {
+  if (partition === null || targetSession === session.defaultSession) return;
+  const origin = safeOrigin(targetUrl);
+  if (origin === null) return;
+  const marker = path.join(
+    app.getPath("userData"),
+    `session-migrated-${partition.replace(/[^a-zA-Z0-9_-]/g, "_")}.flag`,
+  );
+  if (existsSync(marker)) return;
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: origin });
+    for (const cookie of cookies) {
+      await targetSession.cookies.set({
+        url: origin,
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        expirationDate: cookie.expirationDate,
+        sameSite: cookie.sameSite,
+      });
+    }
+    await writeFile(marker, new Date().toISOString(), "utf8");
+  } catch {
+    // Migration is best-effort; a failed copy must not block opening the app.
   }
 }
 
@@ -498,6 +540,7 @@ app.whenReady().then(async () => {
     if (setupSaveInProgress)
       return { ok: false, error: "A connection attempt is already running." };
     setupSaveInProgress = true;
+    const previousSetup = currentSetup;
     try {
       const setup = parseSetupInput(payload);
       if (setup === null) {
@@ -511,17 +554,28 @@ app.whenReady().then(async () => {
       const reachability = await probeServer(setup.serverUrl);
       if (!reachability.ok) return { ok: false, error: reachability.error };
 
+      // Open before persisting so a failed renderer load keeps the last working setup.
+      currentSetup = setup;
+      const opened = await openApp(setup.serverUrl);
+      if (!opened) {
+        currentSetup = previousSetup;
+        return {
+          ok: false,
+          error: "Could not open that server. The previous instance was left unchanged.",
+        };
+      }
+
       try {
         await writeSetup(userDataDir, setup);
       } catch {
+        // The app window is already on the new server; keep currentSetup aligned with it.
+        destroySetupWindow();
         return {
           ok: false,
-          error: "Could not save setup. Check that Rakazo can write to its app-data directory.",
+          error: "Connected, but could not save setup for the next launch.",
         };
       }
-      currentSetup = setup;
-      // Answer the setup window before tearing it down, otherwise the reply is lost.
-      setImmediate(() => void openApp(setup.serverUrl));
+      destroySetupWindow();
       return { ok: true };
     } finally {
       setupSaveInProgress = false;
@@ -537,12 +591,12 @@ app.whenReady().then(async () => {
   } else if (target.source === "saved") {
     const reachability = await probeServer(target.url);
     if (reachability.ok) {
-      await openApp(target.url);
+      if (await openApp(target.url)) destroySetupWindow();
     } else {
       showSetupWindow(`Could not reconnect to the saved server. ${reachability.error}`);
     }
   } else {
-    await openApp(target.url);
+    if (await openApp(target.url)) destroySetupWindow();
   }
 
   app.on("activate", () => {
