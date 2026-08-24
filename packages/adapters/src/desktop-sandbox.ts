@@ -299,34 +299,54 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
     throw new Error("Path escapes the computer workspace");
   const resolvedHome = await realpath(home);
   if (!mustExist) {
-    // Create each parent under a realpath-checked prefix so a symlink/junction
-    // swap cannot mkdir outside the workspace before containment is checked.
+    // Walk/create parents from a held directory fd so a junction swap cannot
+    // redirect mkdir outside the workspace between validation and creation.
     const segments = normalized.split(/[/\\]/u).filter(Boolean);
     let current = resolvedHome;
-    for (const segment of segments.slice(0, -1)) {
-      const next = path.join(current, segment);
-      let created = false;
-      try {
-        await mkdir(next);
-        created = true;
-      } catch (error) {
-        if (!hasErrorCode(error, "EEXIST")) throw error;
-      }
-      try {
-        const resolved = await realpath(next);
-        if (
-          !isAllowedDesktopPath(resolved, [resolvedHome]) ||
-          !(await stat(resolved)).isDirectory()
-        ) {
-          throw new Error("Path escapes the computer workspace");
+    let parentHandle = await open(current, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+    try {
+      for (const segment of segments.slice(0, -1)) {
+        const viaDirFd = childPathViaDirFd(parentHandle.fd, segment);
+        const next = viaDirFd ?? path.join(current, segment);
+        let created = false;
+        try {
+          await mkdir(next);
+          created = true;
+        } catch (error) {
+          if (!hasErrorCode(error, "EEXIST")) throw error;
         }
-        current = resolved;
-      } catch (error) {
-        if (created) await rm(next, { recursive: true, force: true }).catch(() => undefined);
-        throw error;
+        try {
+          const resolved = await realpath(next);
+          const before = await stat(resolved);
+          if (!isAllowedDesktopPath(resolved, [resolvedHome]) || !before.isDirectory()) {
+            throw new Error("Path escapes the computer workspace");
+          }
+          const nextHandle = await open(
+            resolved,
+            constants.O_RDONLY | (constants.O_DIRECTORY ?? 0),
+          );
+          const after = await nextHandle.stat();
+          if (
+            !after.isDirectory() ||
+            after.dev !== before.dev ||
+            after.ino !== before.ino ||
+            !isAllowedDesktopPath(resolved, [resolvedHome])
+          ) {
+            await nextHandle.close().catch(() => undefined);
+            throw new Error("Path escapes the computer workspace");
+          }
+          await parentHandle.close().catch(() => undefined);
+          parentHandle = nextHandle;
+          current = resolved;
+        } catch (error) {
+          if (created) await rm(next, { recursive: true, force: true }).catch(() => undefined);
+          throw error;
+        }
       }
+      return path.join(current, segments.at(-1) ?? "");
+    } finally {
+      await parentHandle.close().catch(() => undefined);
     }
-    return path.join(current, segments.at(-1) ?? "");
   }
   const resolved = await realpath(candidate);
   if (!isAllowedDesktopPath(resolved, [resolvedHome]))
@@ -352,6 +372,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   let created = false;
   let openedPath = path.join(parentReal, name);
+  let viaDirFd: string | undefined;
   try {
     const parentAfter = await parentHandle.stat();
     if (
@@ -363,7 +384,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
     }
 
     // Prefer directory-fd relative opens so a parent path swap cannot redirect creates.
-    const viaDirFd = childPathViaDirFd(parentHandle.fd, name);
+    viaDirFd = childPathViaDirFd(parentHandle.fd, name);
     openedPath = viaDirFd ?? path.join(parentReal, name);
 
     try {
@@ -394,16 +415,33 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
       throw new Error("Path escapes the computer workspace");
     }
     if (!viaDirFd) {
+      // Bind containment to the opened inode so a path swap cannot validate a
+      // different inside path while the handle still refers outside.
       const resolved = await realpath(path.join(parentReal, name));
       if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+        throw new Error("Path escapes the computer workspace");
+      }
+      const resolvedStat = await stat(resolved, { bigint: true });
+      if (resolvedStat.dev !== opened.dev || resolvedStat.ino !== opened.ino) {
         throw new Error("Path escapes the computer workspace");
       }
     }
     return handle;
   } catch (error) {
-    await handle?.close().catch(() => undefined);
-    // Path-based exclusive create may have landed outside through a swapped parent.
-    if (created) await unlink(openedPath).catch(() => undefined);
+    if (created && handle) {
+      const createdStat = await handle.stat({ bigint: true }).catch(() => undefined);
+      await handle.close().catch(() => undefined);
+      handle = undefined;
+      // Only unlink if the path still names the inode we created.
+      if (createdStat) {
+        const present = await lstat(openedPath, { bigint: true }).catch(() => undefined);
+        if (present && present.dev === createdStat.dev && present.ino === createdStat.ino) {
+          await unlink(openedPath).catch(() => undefined);
+        }
+      }
+    } else {
+      await handle?.close().catch(() => undefined);
+    }
     throw error;
   } finally {
     await parentHandle.close().catch(() => undefined);

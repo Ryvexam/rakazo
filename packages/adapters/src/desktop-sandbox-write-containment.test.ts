@@ -156,7 +156,7 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     await writeFile(path.join(outside, "result.txt"), "outside-before");
     let swapped = false;
     lstatRace.afterRealpath = async (inspected) => {
-      if (swapped || path.resolve(inspected) !== parent) return;
+      if (swapped || path.basename(inspected) !== "notes") return;
       swapped = true;
       await rename(parent, displaced);
       await symlink(outside, parent, "junction");
@@ -182,7 +182,7 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     await mkdir(outside);
     let swapped = false;
     lstatRace.afterRealpath = async (inspected) => {
-      if (swapped || path.resolve(inspected) !== parent) return;
+      if (swapped || path.basename(inspected) !== "notes") return;
       swapped = true;
       await rename(parent, displaced);
       await symlink(outside, parent, "junction");
@@ -196,6 +196,36 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     ).rejects.toThrow();
     expect(swapped).toBe(true);
     await expect(readFile(path.join(outside, "result.txt"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("does not create outside directories when a parent is swapped during mkdir", async () => {
+    const { root, desktop, computer } = await fixture("mkdir-swap");
+    const parent = path.join(computer.providerRef, "notes");
+    const displaced = path.join(computer.providerRef, "notes-original");
+    const outside = path.join(root, "outside-directory");
+    await mkdir(parent);
+    await mkdir(outside);
+    let swapped = false;
+    lstatRace.afterRealpath = async (inspected) => {
+      if (swapped || path.basename(inspected) !== "notes") return;
+      swapped = true;
+      await rename(parent, displaced);
+      await symlink(outside, parent, "junction");
+    };
+
+    await expect(
+      desktop.writeFile(computer, {
+        path: "notes/nested/result.txt",
+        content: new TextEncoder().encode("after"),
+      }),
+    ).rejects.toThrow();
+    expect(swapped).toBe(true);
+    await expect(readFile(path.join(outside, "nested/result.txt"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(readFile(path.join(outside, "nested"), "utf8")).rejects.toMatchObject({
       code: "ENOENT",
     });
   });
