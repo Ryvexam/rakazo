@@ -305,19 +305,26 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
     let current = resolvedHome;
     for (const segment of segments.slice(0, -1)) {
       const next = path.join(current, segment);
+      let created = false;
       try {
         await mkdir(next);
+        created = true;
       } catch (error) {
         if (!hasErrorCode(error, "EEXIST")) throw error;
       }
-      const resolved = await realpath(next);
-      if (
-        !isAllowedDesktopPath(resolved, [resolvedHome]) ||
-        !(await stat(resolved)).isDirectory()
-      ) {
-        throw new Error("Path escapes the computer workspace");
+      try {
+        const resolved = await realpath(next);
+        if (
+          !isAllowedDesktopPath(resolved, [resolvedHome]) ||
+          !(await stat(resolved)).isDirectory()
+        ) {
+          throw new Error("Path escapes the computer workspace");
+        }
+        current = resolved;
+      } catch (error) {
+        if (created) await rm(next, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
       }
-      current = resolved;
     }
     return path.join(current, segments.at(-1) ?? "");
   }
@@ -328,28 +335,53 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
 }
 
 async function openContainedWorkspaceFile(home: string, target: string, mode: number) {
-  let handle: Awaited<ReturnType<typeof open>>;
-  let created = false;
-  try {
-    // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
-    // Validation below binds the write to this handle before any content is changed.
-    handle = await open(target, constants.O_WRONLY | O_NOFOLLOW);
-  } catch (error) {
-    if (!hasErrorCode(error, "ENOENT")) throw error;
-    // Exclusive creation fails closed if a final link or file appears concurrently.
-    handle = await open(
-      target,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
-      mode,
-    );
-    created = true;
+  const resolvedHome = await realpath(home);
+  const parentPath = path.dirname(target);
+  const name = path.basename(target);
+  if (!name || name === "." || name === "..") {
+    throw new Error("Path escapes the computer workspace");
   }
 
+  const parentReal = await realpath(parentPath);
+  if (!isAllowedDesktopPath(parentReal, [resolvedHome])) {
+    throw new Error("Path escapes the computer workspace");
+  }
+  const parentBefore = await stat(parentReal);
+  const parentHandle = await open(parentReal, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  let created = false;
+  let openedPath = path.join(parentReal, name);
   try {
+    const parentAfter = await parentHandle.stat();
+    if (
+      !parentAfter.isDirectory() ||
+      parentAfter.dev !== parentBefore.dev ||
+      parentAfter.ino !== parentBefore.ino
+    ) {
+      throw new Error("Path escapes the computer workspace");
+    }
+
+    // Prefer directory-fd relative opens so a parent path swap cannot redirect creates.
+    const viaDirFd = childPathViaDirFd(parentHandle.fd, name);
+    openedPath = viaDirFd ?? path.join(parentReal, name);
+
+    try {
+      // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
+      handle = await open(openedPath, constants.O_WRONLY | O_NOFOLLOW);
+    } catch (error) {
+      if (!hasErrorCode(error, "ENOENT")) throw error;
+      handle = await open(
+        openedPath,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
+        mode,
+      );
+      created = true;
+    }
+
     const opened = await handle.stat({ bigint: true });
-    const named = await lstat(target, { bigint: true });
-    const resolved = await realpath(target);
-    const resolvedHome = await realpath(home);
+    // lstat the same child path we opened so a followed final symlink cannot match.
+    const named = await lstat(openedPath, { bigint: true });
     if (
       !opened.isFile() ||
       !named.isFile() ||
@@ -357,18 +389,30 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
       opened.dev !== named.dev ||
       opened.ino !== named.ino ||
       opened.nlink !== 1n ||
-      named.nlink !== 1n ||
-      !isAllowedDesktopPath(resolved, [resolvedHome])
+      named.nlink !== 1n
     ) {
       throw new Error("Path escapes the computer workspace");
     }
+    if (!viaDirFd) {
+      const resolved = await realpath(path.join(parentReal, name));
+      if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+        throw new Error("Path escapes the computer workspace");
+      }
+    }
     return handle;
   } catch (error) {
-    await handle.close().catch(() => undefined);
-    // If exclusive create followed a swapped parent link, remove the empty outside file.
-    if (created) await unlink(target).catch(() => undefined);
+    await handle?.close().catch(() => undefined);
+    // Path-based exclusive create may have landed outside through a swapped parent.
+    if (created) await unlink(openedPath).catch(() => undefined);
     throw error;
+  } finally {
+    await parentHandle.close().catch(() => undefined);
   }
+}
+
+function childPathViaDirFd(fd: number, name: string) {
+  if (process.platform === "linux") return `/proc/self/fd/${fd}/${name}`;
+  return undefined;
 }
 
 function hasErrorCode(error: unknown, code: string): error is NodeJS.ErrnoException {

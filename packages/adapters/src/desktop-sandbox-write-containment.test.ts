@@ -84,7 +84,7 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     expect(await readFile(outside, "utf8")).toBe("before");
   });
 
-  it("does not write outside when the final file is replaced after lstat", async () => {
+  it("keeps writes on the opened inode when the final name is replaced after lstat", async () => {
     const { root, desktop, computer } = await fixture("swap-link");
     const target = path.join(computer.providerRef, "result.txt");
     const displaced = path.join(computer.providerRef, "result-original.txt");
@@ -93,21 +93,19 @@ describe("desktop sandbox write containment without O_NOFOLLOW", () => {
     await writeFile(outside, "outside-before");
     let swapped = false;
     lstatRace.after = async (inspected) => {
-      if (swapped || path.resolve(inspected) !== target) return;
+      if (swapped || path.basename(inspected) !== "result.txt") return;
       swapped = true;
       await rename(target, displaced);
       await symlink(outside, target);
     };
 
-    await expect(
-      desktop.writeFile(computer, {
-        path: "result.txt",
-        content: new TextEncoder().encode("after"),
-      }),
-    ).rejects.toThrow();
+    await desktop.writeFile(computer, {
+      path: "result.txt",
+      content: new TextEncoder().encode("after"),
+    });
     expect(swapped).toBe(true);
     expect(await readFile(outside, "utf8")).toBe("outside-before");
-    expect(await readFile(displaced, "utf8")).toBe("inside-before");
+    expect(await readFile(displaced, "utf8")).toBe("after");
   });
 
   it("rejects a parent symlink that resolves outside the workspace", async () => {
