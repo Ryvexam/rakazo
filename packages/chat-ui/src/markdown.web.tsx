@@ -44,15 +44,18 @@ function CheckIcon() {
 
 function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
   const preRef = useRef<HTMLPreElement>(null);
+  const resetTimerRef = useRef<number | undefined>(undefined);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
+    if (!navigator.clipboard) return;
     const text = preRef.current?.textContent ?? "";
     navigator.clipboard
       .writeText(text)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = window.setTimeout(() => setCopied(false), 1500);
       })
       .catch(() => {});
   }, []);
