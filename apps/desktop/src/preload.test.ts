@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
-import type { RakazoDesktop } from "@rakazo/contracts";
+import type { RakazoDesktop, RakazoSetup } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 function runPreload(file: string) {
@@ -53,6 +53,34 @@ describe("desktop preload bridge", () => {
       "desktop.update.check",
       "desktop.update.download",
       "desktop.update.install",
+    ]);
+  });
+
+  it("keeps setup off the app bridge so a connected server cannot re-point the app", () => {
+    const { exposeInMainWorld } = runPreload("preload.cjs");
+    const [, bridge] = exposeInMainWorld.mock.calls[0] as [string, Record<string, unknown>];
+    expect(Object.keys(bridge).sort()).toEqual(["platform", "update", "window"]);
+  });
+});
+
+describe("setup preload bridge", () => {
+  it("exposes only the first-run setup operations", async () => {
+    const { invoke, exposeInMainWorld } = runPreload("setup-preload.cjs");
+
+    expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
+    const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoSetup];
+    expect(globalName).toBe("rakazoSetup");
+    expect(Object.keys(bridge).sort()).toEqual(["quit", "save", "state", "test"]);
+
+    await bridge.state();
+    await bridge.test("http://127.0.0.1:5173");
+    await bridge.save({ mode: "new", serverUrl: "http://127.0.0.1:5173" });
+    await bridge.quit();
+    expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
+      "desktop.setup.state",
+      "desktop.setup.test",
+      "desktop.setup.save",
+      "desktop.setup.quit",
     ]);
   });
 });
