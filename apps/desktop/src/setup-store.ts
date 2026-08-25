@@ -38,3 +38,8 @@ export async function writeSetup(userDataDir: string, setup: DesktopSetup): Prom
     await rm(temporary, { force: true }).catch(() => undefined);
   }
 }
+
+/** Removes saved setup so the next launch runs first-run again. */
+export async function clearSetup(userDataDir: string): Promise<void> {
+  await rm(setupFilePath(userDataDir), { force: true });
+}

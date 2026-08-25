@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readSetup, setupFilePath, writeSetup } from "./setup-store.js";
+import { clearSetup, readSetup, setupFilePath, writeSetup } from "./setup-store.js";
 
 let userData: string;
 
@@ -25,6 +25,12 @@ describe("setup store", () => {
       mode: "existing",
       serverUrl: "https://rakazo.example.com",
     });
+  });
+
+  it("clears saved setup so first-run runs again", async () => {
+    await writeSetup(userData, { mode: "existing", serverUrl: "https://rakazo.example.com" });
+    await clearSetup(userData);
+    await expect(readSetup(userData)).resolves.toBeNull();
   });
 
   it("creates the user data directory when it does not exist yet", async () => {

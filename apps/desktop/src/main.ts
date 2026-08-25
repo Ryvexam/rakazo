@@ -21,7 +21,7 @@ import {
   servesBundledRenderer,
   sessionPartitionForServerUrl,
 } from "./setup-config.js";
-import { readSetup, writeSetup } from "./setup-store.js";
+import { clearSetup, readSetup, writeSetup } from "./setup-store.js";
 import { browserWindowOptions, setupWindowOptions, warmWindowTtlMs } from "./window-options.js";
 
 const PERFORMANCE_USER_DATA = process.env.RAKAZO_PERFORMANCE_USER_DATA;
@@ -761,6 +761,12 @@ app.whenReady().then(async () => {
         await writeSetup(userDataDir, setup);
         if (rendererWatch?.crashed()) {
           abandonPendingAppSwitch(previousSetup, previousUrl);
+          try {
+            if (previousSetup !== null) await writeSetup(userDataDir, previousSetup);
+            else await clearSetup(userDataDir);
+          } catch {
+            // Best-effort disk rollback; in-memory session already restored.
+          }
           return {
             ok: false,
             error: "Could not open that server. Renderer stopped.",
