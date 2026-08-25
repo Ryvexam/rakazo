@@ -530,6 +530,9 @@ async function assertContainedFileHandle(
   try {
     const verified = await verify.stat({ bigint: true });
     const named = await lstat(verifyPath, { bigint: true });
+    // Re-stat the write handle last so a hardlink planted during verify cannot
+    // make an outside inode appear to live under the restored parent.
+    const again = await handle.stat({ bigint: true });
     if (
       !verified.isFile() ||
       !named.isFile() ||
@@ -537,7 +540,12 @@ async function assertContainedFileHandle(
       verified.dev !== opened.dev ||
       verified.ino !== opened.ino ||
       named.dev !== opened.dev ||
-      named.ino !== opened.ino
+      named.ino !== opened.ino ||
+      verified.nlink !== 1n ||
+      named.nlink !== 1n ||
+      again.dev !== opened.dev ||
+      again.ino !== opened.ino ||
+      again.nlink !== 1n
     ) {
       throw new Error("Path escapes the computer workspace");
     }
