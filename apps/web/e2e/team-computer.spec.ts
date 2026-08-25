@@ -170,7 +170,9 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
   await expect(page.getByText(/is using it/i).first()).toBeVisible();
   await captureScreenshot(page, testInfo, "48b-take-control-blocked-while-busy");
 
-  await rpc(page, "threads/stop", { botId: chiefId });
+  // Stop through the shell so the client refreshes computer status (API stop alone
+  // does not emit a terminal thread event).
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await waitForIdle(page, chiefId);
   await expect
     .poll(
