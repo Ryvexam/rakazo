@@ -126,7 +126,10 @@ describe("reduceUpdateState", () => {
 
   it("clamps progress to a percentage while downloading", () => {
     expect(
-      apply([{ type: "available", version: "0.2.0" }, { type: "progress", percent: -5 }]).percent,
+      apply([
+        { type: "available", version: "0.2.0" },
+        { type: "progress", percent: -5 },
+      ]).percent,
     ).toBe(0);
     expect(
       apply([
