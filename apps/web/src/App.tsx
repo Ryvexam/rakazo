@@ -1,7 +1,8 @@
-import { lazy, Suspense, useLayoutEffect } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { authClient } from "./lib/auth";
 import { markAfterPaint, markOnce } from "./lib/performance";
+import { sessionGate, sessionRetryDelayMs } from "./lib/session-gate";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
 import { ShellPage } from "./pages/Shell";
 
@@ -22,13 +23,15 @@ export function App() {
     markOnce("rk:renderer:session-committed");
     markAfterPaint("rk:renderer:session-painted");
   }, [session.isPending]);
-  if (session.isPending) {
+  if (session.isPending && !session.data) {
     return window.location.pathname.startsWith("/app") ? (
       <ShellSkeleton />
     ) : (
       <div className="grid h-full place-items-center text-[#6C6C70]">Loading…</div>
     );
   }
+  const gate = sessionGate(session);
+  if (gate === "unreachable") return <SessionUnavailable refetch={session.refetch} />;
   const user = session.data?.user;
   return (
     <Suspense fallback={<div className="h-full bg-[#050506]" />}>
@@ -61,6 +64,42 @@ export function App() {
         />
       </Routes>
     </Suspense>
+  );
+}
+
+/**
+ * A session lookup that never reached the server is not a sign-out, so the app
+ * waits and retries here instead of routing to sign-in and stranding a signed-in
+ * user. Better Auth only polls once a session exists, so the retry lives here.
+ */
+function SessionUnavailable({ refetch }: { refetch: () => Promise<void> }) {
+  const [attempt, setAttempt] = useState(0);
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void refetchRef.current().finally(() => setAttempt((value) => value + 1));
+    }, sessionRetryDelayMs(attempt));
+    return () => clearTimeout(timer);
+  }, [attempt]);
+
+  return (
+    <div className="grid h-full place-items-center bg-[#050506] px-6 text-center">
+      <div>
+        <div className="text-[15px] text-[#ECECEE]">Reconnecting…</div>
+        <p className="mt-2 text-[13.5px] text-[#6C6C70]">
+          Rakazo can&apos;t reach the server. You are still signed in.
+        </p>
+        <button
+          type="button"
+          onClick={() => setAttempt(0)}
+          className="mt-4 rounded-[11px] border border-[#26262A] px-4 py-2 text-[13px] text-[#ECECEE]"
+        >
+          Retry now
+        </button>
+      </div>
+    </div>
   );
 }
 
