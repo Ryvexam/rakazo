@@ -671,7 +671,12 @@ export function ShellPage() {
               }
               if (event.payload.role === "bot") markBotReadIfVisible(active.id);
             }
-            if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
+            if (
+              isRunTerminalEvent(event) ||
+              event.type === "run.waiting_takeover" ||
+              event.type === "skill.teaching.stopped"
+            ) {
+              // waiting_takeover clears busyBotName (same rule as computer.takeover 409).
               void refreshThread(active.id).catch(() => undefined);
             } else if (event.type === "computer.takeover.requested") {
               void refreshThread(active.id).catch(() => undefined);
@@ -1267,9 +1272,6 @@ export function ShellPage() {
         force: computer?.state !== "running",
       });
       setComputerOpen(true);
-      if (needsTakeover && blocked) {
-        setComputerError("Stop the bot first");
-      }
     } catch {
       // computerError already set in bootComputer
     }
@@ -1854,9 +1856,6 @@ export function ShellPage() {
                       size="sm"
                       disabled={takeoverBlocked}
                       title={takeoverBlocked ? "Stop the bot first" : undefined}
-                      aria-label={
-                        takeoverBlocked ? "Take control — stop the bot first" : "Take control"
-                      }
                       onClick={() => void openComputer()}
                     >
                       Take control
@@ -2361,9 +2360,6 @@ export function ShellPage() {
                   size="sm"
                   disabled={takeoverBlocked}
                   title={takeoverBlocked ? "Stop the bot first" : undefined}
-                  aria-label={
-                    takeoverBlocked ? "Take control — stop the bot first" : "Take control"
-                  }
                   onClick={() =>
                     void bootComputer({ takeControl: true, overlay: false }).catch(() => undefined)
                   }

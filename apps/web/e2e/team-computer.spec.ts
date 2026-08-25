@@ -168,6 +168,7 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
   const takeControl = page.getByRole("button", { name: /Take control/i }).first();
   await expect(takeControl).toBeDisabled();
   await expect(page.getByText(/is using it/i).first()).toBeVisible();
+  await captureScreenshot(page, testInfo, "48b-take-control-blocked-while-busy");
 
   await rpc(page, "threads/stop", { botId: chiefId });
   await waitForIdle(page, chiefId);
