@@ -184,7 +184,24 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
         reject(new Error(`The server answered with HTTP ${mainStatus}.`));
         return;
       }
-      resolve();
+      void contents
+        .executeJavaScript(
+          `Boolean(document.body && (document.getElementById("root") || document.querySelector("main") || document.body.children.length > 0))`,
+        )
+        .then((usable: unknown) => {
+          if (contents.isCrashed()) {
+            reject(new Error("Renderer stopped after load."));
+            return;
+          }
+          if (!usable) {
+            reject(new Error("The server page loaded empty."));
+            return;
+          }
+          resolve();
+        })
+        .catch((inspectError: unknown) => {
+          reject(inspectError instanceof Error ? inspectError : new Error(String(inspectError)));
+        });
     };
 
     const onFail = (
@@ -508,6 +525,8 @@ function abandonPendingAppSwitch(
     const failed = mainWindow;
     if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
     mainWindow = previous;
+    previous.show();
+    previous.focus();
     currentSetup = previousSetup;
     currentTargetUrl = previousUrl;
     return "restored";

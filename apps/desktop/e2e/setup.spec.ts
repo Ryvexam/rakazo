@@ -157,6 +157,38 @@ test("an unreachable address is reported instead of being saved", async () => {
   });
 });
 
+test("an HTTP error document is not accepted after a healthy probe", async () => {
+  const broken = createServer((request, response) => {
+    if (request.url === "/rpc/health" && request.method === "POST") {
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ json: { ok: true, version: "0.1.0" } }));
+      return;
+    }
+    response.writeHead(503, { "content-type": "text/html; charset=utf-8" });
+    response.end("<!doctype html><html><body><h1>Unavailable</h1></body></html>");
+  });
+  await new Promise<void>((resolve) => broken.listen(0, "127.0.0.1", resolve));
+  const address = broken.address();
+  if (address === null || typeof address === "string") throw new Error("broken server has no port");
+
+  try {
+    app = await launch();
+    const setup = await app.firstWindow();
+    await setup.getByRole("radio", { name: /Existing instance/ }).check();
+    await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(setup.locator("#status")).toContainText("Could not open that server.");
+    await expect(async () => {
+      await expect(readFile(path.join(userData, "setup.json"), "utf8")).rejects.toThrow();
+    }).toPass();
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      broken.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
 test("a malformed address is rejected before anything is written", async () => {
   app = await launch();
   const setup = await app.firstWindow();
