@@ -235,6 +235,13 @@ export function userHoldsComputerControl(
   return Boolean(botId && computer?.controlHolder === "user" && computer.controlBotId === botId);
 }
 
+/** True when status says a bot run/lease blocks Take control (API would return 409). */
+export function computerTakeoverBlocked(
+  computer: Pick<ComputerStatus, "busyBotName"> | null | undefined,
+): boolean {
+  return Boolean(computer?.busyBotName);
+}
+
 export function computerPanelAutoBoot(
   state: ComputerStatus["state"] | undefined,
   screenUrl?: string | null,

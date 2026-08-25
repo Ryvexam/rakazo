@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeThreadRuns,
   computerPanelAutoBoot,
+  computerTakeoverBlocked,
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
   prependThreadMessagePage,
@@ -832,6 +833,12 @@ describe("computer event reduction", () => {
     });
     expect(userHoldsComputerControl(granted, "bot-1")).toBe(true);
     expect(userHoldsComputerControl(granted, "bot-2")).toBe(false);
+  });
+
+  it("treats a busy bot name as a blocked takeover", () => {
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }))).toBe(true);
+    expect(computerTakeoverBlocked(computer({ busyBotName: null }))).toBe(false);
+    expect(computerTakeoverBlocked(null)).toBe(false);
   });
 
   it("auto-boots stopped computers and recovers a running screen that has no URL", () => {
