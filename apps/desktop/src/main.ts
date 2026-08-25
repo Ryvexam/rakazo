@@ -780,11 +780,19 @@ app.whenReady().then(async () => {
         // Commit while the crash listener is still armed, then dispose.
         commitPendingAppSwitch();
         if (rendererWatch?.crashed()) {
-          // Previous window is already gone; still roll back disk for next launch.
+          // Previous window is already gone; roll back disk and drop the dead window
+          // so setup can reconnect to the restored saved instance.
           await rollbackSetupFile(userDataDir, previousSetup);
+          currentSetup = previousSetup;
+          currentTargetUrl = previousUrl;
+          if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.destroy();
+          mainWindow = null;
           return {
             ok: false,
-            error: "Could not open that server. Renderer stopped.",
+            error:
+              previousSetup !== null
+                ? "Could not open that server. Renderer stopped. The previous instance was restored for the next launch."
+                : "Could not open that server. Renderer stopped.",
           };
         }
       } catch {
