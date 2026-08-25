@@ -40,9 +40,14 @@ export function ScratchpadSection({ botId }: { botId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await rpc.scratchpad.create({ botId, title });
+      const created = await rpc.scratchpad.create({ botId, title });
       setDraft("");
-      await refresh();
+      setItems((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      try {
+        await refresh();
+      } catch {
+        setError("Saved, but list refresh failed");
+      }
     } catch {
       setError("Could not add");
     } finally {
@@ -55,8 +60,16 @@ export function ScratchpadSection({ botId }: { botId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await rpc.scratchpad.update({ itemId: item.id, status });
-      await refresh();
+      const updated = await rpc.scratchpad.update({ itemId: item.id, status });
+      setItems((current) => {
+        const next = current.map((entry) => (entry.id === updated.id ? updated : entry));
+        return status === "done" ? next.filter((entry) => entry.status !== "done") : next;
+      });
+      try {
+        await refresh();
+      } catch {
+        setError("Saved, but list refresh failed");
+      }
     } catch {
       setError("Could not update");
     } finally {
@@ -70,7 +83,12 @@ export function ScratchpadSection({ botId }: { botId: string }) {
     setError(null);
     try {
       await rpc.scratchpad.remove({ itemId: item.id });
-      await refresh();
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      try {
+        await refresh();
+      } catch {
+        setError("Removed, but list refresh failed");
+      }
     } catch {
       setError("Could not remove");
     } finally {
