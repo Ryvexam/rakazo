@@ -208,6 +208,8 @@ jobs:
       - name: Verify Linux update feed is pinned to the official GitHub channel
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
           config="apps/desktop/out/linux-unpacked/resources/app-update.yml"
@@ -220,7 +222,7 @@ jobs:
           grep -Fqx "owner: elie222" "$config"
           grep -Fqx "repo: rakazo" "$config"
           test -f apps/desktop/out/latest-linux.yml
-          grep -Fqx "version: ${{ needs.validate.outputs.version }}" apps/desktop/out/latest-linux.yml
+          grep -Fqx "version: $RELEASE_VERSION" apps/desktop/out/latest-linux.yml
 
       - name: Retain installers and updater metadata
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

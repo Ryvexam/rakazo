@@ -873,7 +873,9 @@ app.whenReady().then(async () => {
     }
     quitting = true;
     const state = await desktopUpdater.install();
-    if (state.phase === "error") quitting = false;
+    // Install failures leave ready via installFailed; also clear quitting if still ready
+    // is no longer true for any other reason.
+    if (state.phase !== "ready") quitting = false;
     return state;
   });
   ipcMain.handle("desktop.setup.state", (event) => {

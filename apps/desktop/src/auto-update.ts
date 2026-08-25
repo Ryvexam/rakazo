@@ -89,7 +89,7 @@ export type UpdaterEvent =
   | { type: "download-start" }
   | { type: "progress"; percent: number }
   | { type: "downloaded"; version: string }
-  | { type: "failed"; error: unknown; userInitiated: boolean };
+  | { type: "failed"; error: unknown; userInitiated: boolean; installFailed?: boolean };
 
 export function reduceUpdateState(
   state: DesktopUpdateState,
@@ -143,8 +143,9 @@ export function reduceUpdateState(
         message: "Restart Rakazo to finish the update.",
       };
     case "failed": {
-      // electron-updater can emit late errors after a verified download; keep installable state.
-      if (state.phase === "ready") return state;
+      // electron-updater can emit late errors after a verified download; keep installable
+      // state unless this failure came from quitAndInstall itself.
+      if (state.phase === "ready" && event.installFailed !== true) return state;
       const failure = classifyUpdaterFailure(event.error);
       if (failure.kind === "no-releases" && state.phase === "checking") {
         return {
@@ -165,7 +166,7 @@ export function reduceUpdateState(
           checkedAt: now,
         };
       }
-      if (failure.kind === "offline") {
+      if (failure.kind === "offline" && event.installFailed !== true) {
         return {
           ...state,
           phase: "idle",
@@ -399,7 +400,7 @@ export class DesktopUpdateController {
       updater.quitAndInstall();
     } catch (error) {
       this.installStarted = false;
-      this.push({ type: "failed", error, userInitiated: true });
+      this.push({ type: "failed", error, userInitiated: true, installFailed: true });
     }
     return this.current;
   }

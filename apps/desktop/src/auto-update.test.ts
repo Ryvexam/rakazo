@@ -157,6 +157,23 @@ describe("reduceUpdateState", () => {
     expect(ready).toMatchObject({ phase: "ready", availableVersion: "0.2.0", percent: 100 });
   });
 
+  it("lets an install failure leave the ready phase", () => {
+    const failed = apply([
+      { type: "downloaded", version: "0.2.0" },
+      {
+        type: "failed",
+        error: new Error("quitAndInstall failed"),
+        userInitiated: true,
+        installFailed: true,
+      },
+    ]);
+    expect(failed).toMatchObject({
+      phase: "error",
+      availableVersion: "0.2.0",
+      message: "The update could not be completed. Try again later.",
+    });
+  });
+
   it("does not let a stray check-start interrupt an in-flight download", () => {
     const downloading = apply([
       { type: "download-start" },
@@ -301,7 +318,7 @@ describe("DesktopUpdateController", () => {
     fake = fakeUpdater({
       checkForUpdates: vi.fn(async () => {
         fake.emit("checking-for-update");
-        if (fake.updater.checkForUpdates.mock.calls.length === 1) {
+        if (vi.mocked(fake.updater.checkForUpdates).mock.calls.length === 1) {
           fake.emit("update-not-available");
         } else {
           fake.emit("error", new Error("getaddrinfo ENOTFOUND github.com"));
@@ -344,7 +361,7 @@ describe("DesktopUpdateController", () => {
     fake = fakeUpdater({
       checkForUpdates: vi.fn(async () => {
         fake.emit("checking-for-update");
-        if (fake.updater.checkForUpdates.mock.calls.length === 1) {
+        if (vi.mocked(fake.updater.checkForUpdates).mock.calls.length === 1) {
           fake.emit("error", new Error("HttpError: 404 Not Found"));
         } else {
           fake.emit("update-not-available");
