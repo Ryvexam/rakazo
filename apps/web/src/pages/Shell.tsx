@@ -1059,13 +1059,29 @@ export function ShellPage() {
     const botTarget = activeBotId.current;
     const groupTarget = activeGroupId.current;
     if (groupTarget) {
-      await rpc.threads.stop({ groupId: groupTarget });
-      await refreshGroupThreadRef.current(groupTarget);
+      setSendError(null);
+      try {
+        await rpc.threads.stop({ groupId: groupTarget });
+      } catch (error) {
+        if (activeGroupId.current === groupTarget) {
+          setSendError(error instanceof Error ? error.message : "Failed to stop");
+        }
+        return;
+      }
+      await refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
       return;
     }
     if (!botTarget) return;
-    await rpc.threads.stop({ botId: botTarget });
-    await refreshThreadRef.current(botTarget);
+    setSendError(null);
+    try {
+      await rpc.threads.stop({ botId: botTarget });
+    } catch (error) {
+      if (activeBotId.current === botTarget) {
+        setSendError(error instanceof Error ? error.message : "Failed to stop");
+      }
+      return;
+    }
+    await refreshThreadRef.current(botTarget).catch(() => undefined);
   }, []);
   const stopTeaching = useCallback(async () => {
     const id = activeBotId.current;
@@ -2320,6 +2336,18 @@ export function ShellPage() {
               ) : null}
             </div>
             <div className="flex items-center gap-3">
+              {composerRunning ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label="Stop"
+                  data-testid="computer-overlay-stop"
+                  onClick={() => void stopRun()}
+                >
+                  Stop
+                </Button>
+              ) : null}
               {recordingSkill ? (
                 <TeachStopButton busy={teachBusy} onStop={stopTeaching} />
               ) : hasControl ? (
@@ -2347,6 +2375,14 @@ export function ShellPage() {
               </button>
             </div>
           </div>
+          {sendError ? (
+            <div
+              role="alert"
+              className="border-b border-[#5A2A2A] bg-[#2A1717] px-[18px] py-2 text-[13px] text-[#F1A8A8]"
+            >
+              {sendError}
+            </div>
+          ) : null}
           <div className="relative min-h-0 flex-1 bg-[#0E0E10]">
             {computer?.kind === "desktop" ? (
               <div className="grid h-full place-items-center px-8 text-center text-sm text-[#6C6C70]">
@@ -2589,7 +2625,7 @@ const Composer = memo(function Composer({
   }
 
   return (
-    <div className="px-3 pb-4 pt-3 md:px-6 md:pb-6">
+    <div className="relative z-30 px-3 pb-4 pt-3 md:px-6 md:pb-6">
       {sendError || dictationError ? (
         <div className="mb-3 rounded-[14px] border border-[#5A2A2A] bg-[#2A1717] px-4 py-2 text-[13px] text-[#F1A8A8]">
           {sendError ?? dictationError}
