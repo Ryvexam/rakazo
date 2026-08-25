@@ -41,6 +41,8 @@ describe("desktop release workflow", () => {
     expect(workflow).toContain('grep -Fqx "repo: rakazo"');
     expect(workflow).toContain("Verify Linux update feed is pinned to the official GitHub channel");
     expect(workflow).toContain("Windows update config missing");
+    expect(workflow).toContain("RELEASE_VERSION:");
+    expect(workflow).toContain('grep -Fqx "version: $RELEASE_VERSION"');
   });
 
   it("publishes only a complete stable, upgrade-only feed", () => {

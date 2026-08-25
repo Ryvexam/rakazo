@@ -356,6 +356,32 @@ describe("DesktopUpdateController", () => {
     expect(fake.updater.quitAndInstall).toHaveBeenCalledTimes(1);
   });
 
+  it("reports install failures instead of staying ready", async () => {
+    let fake: ReturnType<typeof fakeUpdater>;
+    fake = fakeUpdater({
+      checkForUpdates: vi.fn(async () => {
+        fake.emit("checking-for-update");
+        fake.emit("update-available", { version: "0.2.0" });
+      }),
+      downloadUpdate: vi.fn(async () => {
+        fake.emit("update-downloaded", { version: "0.2.0" });
+      }),
+      quitAndInstall: vi.fn(() => {
+        throw new Error("quitAndInstall failed");
+      }),
+    });
+    const controller = new DesktopUpdateController(packaged, async () => fake.updater, clock);
+    await controller.check(false);
+    await vi.waitFor(() => expect(controller.state().phase).toBe("ready"));
+
+    const state = await controller.install();
+    expect(state).toMatchObject({
+      phase: "error",
+      message: "The update could not be completed. Try again later.",
+    });
+    expect(await controller.install()).toMatchObject({ phase: "error" });
+  });
+
   it("lets a manual check escape a prior empty-feed freeze", async () => {
     let fake: ReturnType<typeof fakeUpdater>;
     fake = fakeUpdater({
