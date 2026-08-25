@@ -21,6 +21,22 @@ export function sessionGate(session: SessionGateInput): SessionGate {
   return "anonymous";
 }
 
+/**
+ * Better Auth clears `error` and sets `isPending` while a null-session refetch
+ * runs, which would otherwise look like a cold "loading" and unmount the
+ * reconnect UI (resetting backoff). Hold the unreachable screen across that
+ * refetch until the gate resolves to authenticated or anonymous.
+ */
+export function holdUnreachableGate(gate: SessionGate, holding: boolean): boolean {
+  if (gate === "unreachable") return true;
+  if (gate === "authenticated" || gate === "anonymous") return false;
+  return holding;
+}
+
+export function showSessionUnavailable(gate: SessionGate, holding: boolean): boolean {
+  return gate === "unreachable" || (holding && gate === "loading");
+}
+
 const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 15_000;
 

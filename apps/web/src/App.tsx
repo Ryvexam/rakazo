@@ -2,7 +2,12 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "re
 import { Navigate, Route, Routes } from "react-router-dom";
 import { authClient } from "./lib/auth";
 import { markAfterPaint, markOnce } from "./lib/performance";
-import { sessionGate, sessionRetryDelayMs } from "./lib/session-gate";
+import {
+  holdUnreachableGate,
+  sessionGate,
+  sessionRetryDelayMs,
+  showSessionUnavailable,
+} from "./lib/session-gate";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
 import { ShellPage } from "./pages/Shell";
 
@@ -18,20 +23,28 @@ const WelcomePage = lazy(() =>
 
 export function App() {
   const session = authClient.useSession();
+  const gate = sessionGate(session);
+  const [holdingUnreachable, setHoldingUnreachable] = useState(false);
+  const nextHolding = holdUnreachableGate(gate, holdingUnreachable);
+  if (nextHolding !== holdingUnreachable) setHoldingUnreachable(nextHolding);
+
   useLayoutEffect(() => {
     if (session.isPending) return;
     markOnce("rk:renderer:session-committed");
     markAfterPaint("rk:renderer:session-painted");
   }, [session.isPending]);
-  if (session.isPending && !session.data) {
+
+  if (showSessionUnavailable(gate, nextHolding)) {
+    return <SessionUnavailable refetch={session.refetch} />;
+  }
+  if (gate === "loading") {
     return window.location.pathname.startsWith("/app") ? (
       <ShellSkeleton />
     ) : (
       <div className="grid h-full place-items-center text-[#6C6C70]">Loading…</div>
     );
   }
-  const gate = sessionGate(session);
-  if (gate === "unreachable") return <SessionUnavailable refetch={session.refetch} />;
+
   const user = session.data?.user;
   return (
     <Suspense fallback={<div className="h-full bg-[#050506]" />}>
@@ -74,26 +87,39 @@ export function App() {
  */
 function SessionUnavailable({ refetch }: { refetch: () => Promise<void> }) {
   const [attempt, setAttempt] = useState(0);
+  const [retryKey, setRetryKey] = useState(0);
+  const retryImmediately = useRef(false);
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
 
   useEffect(() => {
+    let cancelled = false;
+    const delay = retryImmediately.current ? 0 : sessionRetryDelayMs(attempt);
+    retryImmediately.current = false;
     const timer = setTimeout(() => {
-      void refetchRef.current().finally(() => setAttempt((value) => value + 1));
-    }, sessionRetryDelayMs(attempt));
-    return () => clearTimeout(timer);
-  }, [attempt]);
+      void refetchRef.current().finally(() => {
+        if (!cancelled) setAttempt((value) => value + 1);
+      });
+    }, delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [attempt, retryKey]);
 
   return (
     <div className="grid h-full place-items-center bg-[#050506] px-6 text-center">
       <div>
         <div className="text-[15px] text-[#ECECEE]">Reconnecting…</div>
-        <p className="mt-2 text-[13.5px] text-[#6C6C70]">
-          Rakazo can&apos;t reach the server. You are still signed in.
-        </p>
+        <p className="mt-2 text-[13.5px] text-[#6C6C70]">Can&apos;t reach the server.</p>
         <button
           type="button"
-          onClick={() => setAttempt(0)}
+          aria-label="Retry now"
+          onClick={() => {
+            retryImmediately.current = true;
+            setAttempt(0);
+            setRetryKey((key) => key + 1);
+          }}
           className="mt-4 rounded-[11px] border border-[#26262A] px-4 py-2 text-[13px] text-[#ECECEE]"
         >
           Retry now

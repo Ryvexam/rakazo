@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { sessionGate, sessionRetryDelayMs } from "./session-gate.js";
+import {
+  holdUnreachableGate,
+  sessionGate,
+  sessionRetryDelayMs,
+  showSessionUnavailable,
+} from "./session-gate.js";
 
 const user = { user: { id: "u_1" } };
 
@@ -32,6 +37,15 @@ describe("session gate", () => {
     expect(sessionGate({ data: user, isPending: false, error: { status: 500 } })).toBe(
       "authenticated",
     );
+  });
+
+  it("holds the reconnect screen across a null-session refetch", () => {
+    expect(holdUnreachableGate("unreachable", false)).toBe(true);
+    expect(holdUnreachableGate("loading", true)).toBe(true);
+    expect(holdUnreachableGate("authenticated", true)).toBe(false);
+    expect(holdUnreachableGate("anonymous", true)).toBe(false);
+    expect(showSessionUnavailable("loading", true)).toBe(true);
+    expect(showSessionUnavailable("loading", false)).toBe(false);
   });
 
   it("backs off between retries and stops growing", () => {
