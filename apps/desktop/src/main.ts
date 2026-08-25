@@ -63,12 +63,42 @@ function developmentIcon() {
   return existsSync(icon) ? icon : undefined;
 }
 
-function sessionForTarget(targetUrl: string) {
-  const partition = sessionPartitionForServerUrl(targetUrl);
-  return {
-    partition,
-    value: partition === null ? session.defaultSession : session.fromPartition(partition),
-  };
+function sessionPartitionKey(targetUrl: string) {
+  return sessionPartitionForServerUrl(targetUrl);
+}
+
+function legacyDefaultSessionFlag(partition: string) {
+  return path.join(
+    app.getPath("userData"),
+    `legacy-default-${partition.replace(/[^a-zA-Z0-9_-]/g, "_")}.flag`,
+  );
+}
+
+/**
+ * Prefer the default session for origins that already have cookies there so
+ * upgrades keep localStorage/IndexedDB. New origins get an isolated partition.
+ */
+async function resolveSessionForTarget(targetUrl: string) {
+  const partition = sessionPartitionKey(targetUrl);
+  if (partition === null) {
+    return { partition: null, value: session.defaultSession };
+  }
+  if (existsSync(legacyDefaultSessionFlag(partition))) {
+    return { partition: null, value: session.defaultSession };
+  }
+  const origin = safeOrigin(targetUrl);
+  if (origin !== null) {
+    try {
+      const defaultCookies = await session.defaultSession.cookies.get({ url: origin });
+      if (defaultCookies.length > 0) {
+        await writeFile(legacyDefaultSessionFlag(partition), new Date().toISOString(), "utf8");
+        return { partition: null, value: session.defaultSession };
+      }
+    } catch {
+      // Fall through to an isolated partition.
+    }
+  }
+  return { partition, value: session.fromPartition(partition) };
 }
 
 function createWindow(url: string, partition: string | null) {
@@ -536,7 +566,7 @@ function openFailureDetail(error: unknown): string {
 }
 
 async function openAppOnce(targetUrl: string) {
-  const target = sessionForTarget(targetUrl);
+  const target = await resolveSessionForTarget(targetUrl);
   const previous = mainWindow;
   let win: BrowserWindow | null = null;
   try {
@@ -544,7 +574,6 @@ async function openAppOnce(targetUrl: string) {
     if (documentError !== null) {
       throw new Error(documentError);
     }
-    await migrateDefaultSessionCookies(targetUrl, target.value, target.partition);
     await installBundledRenderer(targetUrl, target.value, target.partition);
     const created = createWindow(targetUrl, target.partition);
     win = created.win;
@@ -602,15 +631,17 @@ function abandonPendingAppSwitch(
 }
 
 /** Watch for a renderer crash until setup is persisted (or the switch is abandoned). */
-function watchRendererUntilCommitted(win: BrowserWindow): () => boolean {
+function watchRendererUntilCommitted(win: BrowserWindow) {
   let crashed = false;
   const onGone = () => {
     crashed = true;
   };
   win.webContents.once("render-process-gone", onGone);
-  return () => {
-    if (!win.isDestroyed()) win.webContents.removeListener("render-process-gone", onGone);
-    return crashed;
+  return {
+    crashed: () => crashed || (!win.isDestroyed() && win.webContents.isCrashed()),
+    dispose: () => {
+      if (!win.isDestroyed()) win.webContents.removeListener("render-process-gone", onGone);
+    },
   };
 }
 
@@ -618,44 +649,6 @@ function destroySetupWindow() {
   const setup = setupWindow;
   setupWindow = null;
   if (setup !== null && !setup.isDestroyed()) setup.destroy();
-}
-
-/**
- * First launch after this feature may still have auth cookies in the default session
- * (pre-partition installs). Copy matching origin cookies into the per-origin partition once.
- */
-async function migrateDefaultSessionCookies(
-  targetUrl: string,
-  targetSession: Session,
-  partition: string | null,
-) {
-  if (partition === null || targetSession === session.defaultSession) return;
-  const origin = safeOrigin(targetUrl);
-  if (origin === null) return;
-  const marker = path.join(
-    app.getPath("userData"),
-    `session-migrated-${partition.replace(/[^a-zA-Z0-9_-]/g, "_")}.flag`,
-  );
-  if (existsSync(marker)) return;
-  try {
-    const cookies = await session.defaultSession.cookies.get({ url: origin });
-    for (const cookie of cookies) {
-      await targetSession.cookies.set({
-        url: origin,
-        name: cookie.name,
-        value: cookie.value,
-        domain: cookie.domain,
-        path: cookie.path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        expirationDate: cookie.expirationDate,
-        sameSite: cookie.sameSite,
-      });
-    }
-    await writeFile(marker, new Date().toISOString(), "utf8");
-  } catch {
-    // Migration is best-effort; a failed copy must not block opening the app.
-  }
 }
 
 function safeOrigin(targetUrl: string) {
@@ -676,7 +669,9 @@ app.whenReady().then(async () => {
   });
   if (process.env.RAKAZO_PERFORMANCE_CLEAR_CACHE === "1") {
     const cacheSessions = new Set<Session>([session.defaultSession]);
-    if (target.kind === "app") cacheSessions.add(sessionForTarget(target.url).value);
+    if (target.kind === "app") {
+      cacheSessions.add((await resolveSessionForTarget(target.url)).value);
+    }
     await Promise.all(
       [...cacheSessions].flatMap((value) => [value.clearCache(), value.clearCodeCaches({})]),
     );
@@ -758,21 +753,22 @@ app.whenReady().then(async () => {
       }
 
       const appWindow = mainWindow;
-      const finishRendererWatch =
+      const rendererWatch =
         appWindow !== null && !appWindow.isDestroyed()
           ? watchRendererUntilCommitted(appWindow)
-          : () => false;
+          : null;
       try {
         await writeSetup(userDataDir, setup);
-        if (finishRendererWatch()) {
+        if (rendererWatch?.crashed()) {
           abandonPendingAppSwitch(previousSetup, previousUrl);
           return {
             ok: false,
             error: "Could not open that server. Renderer stopped.",
           };
         }
+        // Commit while the crash listener is still armed, then dispose.
+        commitPendingAppSwitch();
       } catch {
-        finishRendererWatch();
         const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
         return {
           ok: false,
@@ -781,9 +777,9 @@ app.whenReady().then(async () => {
               ? "Could not save setup. The previous instance was restored."
               : "Connected, but could not save setup for the next launch. Try Continue again.",
         };
+      } finally {
+        rendererWatch?.dispose();
       }
-      finishRendererWatch();
-      commitPendingAppSwitch();
       destroySetupWindow();
       return { ok: true };
     } finally {
