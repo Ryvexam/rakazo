@@ -1107,6 +1107,12 @@ export function ShellPage() {
         }
         return;
       }
+      // Stop has no terminal event; clear run UI before refresh races with in-flight gets.
+      if (activeGroupId.current === groupTarget) {
+        updateSnapshot((prev) =>
+          prev && prev.groupId === groupTarget ? { ...prev, run: null, activeRuns: [] } : prev,
+        );
+      }
       await refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
       return;
     }
@@ -1119,6 +1125,22 @@ export function ShellPage() {
         setSendError(error instanceof Error ? error.message : "Failed to stop");
       }
       return;
+    }
+    // Stop does not emit a terminal thread event. Clear local run/busy immediately so a
+    // superseded in-flight refresh (older cursor) cannot leave Stop enabled / Take control
+    // blocked while the API is already idle.
+    if (activeBotId.current === botTarget) {
+      updateSnapshot((prev) => {
+        if (!prev || (prev.botId !== botTarget && prev.botId)) return prev;
+        const computer = prev.computer?.busyBotName
+          ? { ...prev.computer, busyBotName: null }
+          : prev.computer;
+        return { ...prev, run: null, activeRuns: [], computer };
+      });
+      const currentComputer = computerRef.current;
+      if (currentComputer?.busyBotName) {
+        commitComputer({ ...currentComputer, busyBotName: null });
+      }
     }
     await refreshThreadRef.current(botTarget).catch(() => undefined);
   }, []);

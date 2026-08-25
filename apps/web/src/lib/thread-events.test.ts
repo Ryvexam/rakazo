@@ -298,6 +298,37 @@ describe("thread event reduction", () => {
     expect(reconciled.snapshot).toBe(newer);
     expect(reconciled.computer?.busyBotName).toBe("Chief");
   });
+
+  it("keeps an optimistic stop clear when an older cursor refresh still looks busy", () => {
+    // Stop has no terminal event, so progress can leave the local cursor ahead of threads.get.
+    // After the shell clears run/busy locally, that older get must not restore Stop / Take control block.
+    const run = threadRun("run-1");
+    const stoppedLocal: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 15,
+      run: null,
+      activeRuns: [],
+      computer: computer({ state: "running", busyBotName: null }),
+    };
+    const staleBusyRefresh: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 10,
+      run,
+      activeRuns: [run],
+      computer: computer({ state: "running", busyBotName: "Chief" }),
+    };
+    const clearedComputer = computer({ state: "running", busyBotName: null });
+
+    const reconciled = reconcileRefreshedThread(stoppedLocal, staleBusyRefresh, clearedComputer);
+
+    expect(reconciled.snapshot.run).toBeNull();
+    expect(reconciled.snapshot.activeRuns).toEqual([]);
+    expect(reconciled.computer?.busyBotName).toBeNull();
+    expect(computerTakeoverBlocked(reconciled.computer, reconciled.snapshot.run?.status)).toBe(
+      false,
+    );
+  });
+
   it("always replaces the snapshot when switching to a different thread", () => {
     const previous: ThreadSnapshot = {
       ...snapshot([]),

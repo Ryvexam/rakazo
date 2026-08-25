@@ -59,6 +59,8 @@ export function mergeThreadSnapshot(
  *
  * A refresh that started earlier can still return running+busyBotName after the client
  * already applied waiting_takeover. Cursor comparisons only apply within the same thread.
+ * Stop clears run/busy optimistically in the shell because it has no terminal event; an
+ * older-cursor refresh must keep that cleared local state (see Shell stopRun).
  */
 export function reconcileRefreshedThread(
   prev: ThreadSnapshot | null,
@@ -69,11 +71,16 @@ export function reconcileRefreshedThread(
   const sameThread = Boolean(prev && prev.threadId === snap.threadId);
 
   if (sameThread && prev && snap.cursor < prev.cursor) {
-    // Progress can advance the thread cursor while the embedded computer status remains
-    // authoritative. Preserve only the event-sourced takeover transition itself.
+    // Progress can advance the thread cursor while embedded computer status from threads.get
+    // is still useful — but only while a live run remains. Preserve event-sourced
+    // waiting_takeover clears and optimistic stop clears.
+    const preserveLocalComputer =
+      prev.run?.status === "waiting_takeover" ||
+      !prev.run ||
+      !isActive(prev.run.status as RunStatus);
     return {
       snapshot: prev,
-      computer: prev.run?.status === "waiting_takeover" ? prevComputer : (snap.computer ?? null),
+      computer: preserveLocalComputer ? prevComputer : (snap.computer ?? null),
     };
   }
 
