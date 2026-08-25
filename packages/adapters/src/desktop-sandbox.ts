@@ -36,6 +36,7 @@ import {
   placeholderObservation,
 } from "./computer-support.js";
 import { isAllowedDesktopPath, normalizeDesktopWorkspacePath } from "./desktop-sandbox-paths.js";
+import { pathFromDirectoryFd } from "./desktop-sandbox-win32-path.js";
 
 const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
@@ -556,6 +557,16 @@ async function assertContainedFileHandle(
 
 function childPathViaDirFd(fd: number, name: string) {
   if (process.platform === "linux") return `/proc/self/fd/${fd}/${name}`;
+  if (process.platform === "win32") {
+    try {
+      // Resolve the held directory inode's current path so mkdir/open do not go
+      // through a junction that replaced the original pathname.
+      return path.join(pathFromDirectoryFd(fd), name);
+    } catch {
+      // Hosts that only pretend to be win32 (unit tests) lack the Win32 APIs.
+      return undefined;
+    }
+  }
   return undefined;
 }
 
