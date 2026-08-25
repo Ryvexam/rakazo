@@ -153,9 +153,29 @@ function createWindow(url: string, partition: string | null) {
   return { loaded, win };
 }
 
+async function probeDocument(url: string): Promise<string | null> {
+  try {
+    const response = await net.fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      cache: "no-store",
+      credentials: "omit",
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+    // Allow 3xx (e.g. / → /login); reject hard HTTP errors before opening a window.
+    if (response.status >= 400) {
+      return `The server answered with HTTP ${response.status}.`;
+    }
+    return null;
+  } catch (error) {
+    return probeFailureMessage(error);
+  }
+}
+
 /**
  * loadURL alone treats many HTTP error documents as success. Reject main-frame
- * failures, renderer crashes during load, and HTTP 4xx/5xx main-frame responses.
+ * failures, renderer crashes during load, HTTP 4xx/5xx main-frame responses, and
+ * empty documents.
  */
 function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
   const contents = win.webContents;
@@ -220,9 +240,13 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
     contents.on("did-fail-load", onFail);
     contents.on("render-process-gone", onGone);
     void contents.loadURL(url).then(
-      () => {
-        // onCompleted can lag loadURL's resolve by a tick.
-        setImmediate(() => settle());
+      async () => {
+        // onCompleted can lag loadURL; wait briefly for the main-frame status.
+        const deadline = Date.now() + 500;
+        while (mainStatus === undefined && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 10));
+        }
+        settle();
       },
       (error: unknown) => {
         settle(error instanceof Error ? error : new Error(String(error)));
@@ -477,11 +501,30 @@ function openApp(targetUrl: string) {
   return openAppPromise;
 }
 
+function openFailureDetail(error: unknown): string {
+  if (error instanceof Error) {
+    const { message } = error;
+    if (
+      message.startsWith("The server answered with HTTP") ||
+      message.startsWith("The server page loaded empty") ||
+      message.startsWith("Renderer stopped") ||
+      message.startsWith("Page failed to load")
+    ) {
+      return message;
+    }
+  }
+  return probeFailureMessage(error);
+}
+
 async function openAppOnce(targetUrl: string) {
   const target = sessionForTarget(targetUrl);
   const previous = mainWindow;
   let win: BrowserWindow | null = null;
   try {
+    const documentError = await probeDocument(targetUrl);
+    if (documentError !== null) {
+      throw new Error(documentError);
+    }
     await migrateDefaultSessionCookies(targetUrl, target.value, target.partition);
     await installBundledRenderer(targetUrl, target.value, target.partition);
     const created = createWindow(targetUrl, target.partition);
@@ -499,7 +542,7 @@ async function openAppOnce(targetUrl: string) {
     if (win !== null && !win.isDestroyed()) win.destroy();
     // Keep the previous app window so Cancel / close can restore it.
     if (previous !== null && !previous.isDestroyed()) mainWindow = previous;
-    showSetupWindow(`Could not open that server. ${probeFailureMessage(error)}`);
+    showSetupWindow(`Could not open that server. ${openFailureDetail(error)}`);
     return false;
   }
 }
