@@ -177,7 +177,7 @@ async function probeDocument(url: string): Promise<string | null> {
 /**
  * loadURL alone treats many HTTP error documents as success. Reject main-frame
  * failures, renderer crashes during load, HTTP 4xx/5xx main-frame responses, and
- * empty documents.
+ * shells that never mount application content.
  */
 function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
   const contents = win.webContents;
@@ -196,32 +196,30 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
       if (settled) return;
       settled = true;
       contents.removeListener("did-fail-load", onFail);
-      contents.removeListener("render-process-gone", onGone);
+      // Keep render-process-gone until document readiness finishes so a crash
+      // during mount still fails the switch.
       targetSession.webRequest.onCompleted(null);
       if (error) {
+        contents.removeListener("render-process-gone", onGone);
         reject(error);
         return;
       }
       if (mainStatus !== undefined && mainStatus >= 400) {
+        contents.removeListener("render-process-gone", onGone);
         reject(new Error(`The server answered with HTTP ${mainStatus}.`));
         return;
       }
-      void contents
-        .executeJavaScript(
-          `Boolean(document.body && (document.getElementById("root") || document.querySelector("main") || document.body.children.length > 0))`,
-        )
-        .then((usable: unknown) => {
+      void waitForMountedAppDocument(contents)
+        .then(() => {
+          contents.removeListener("render-process-gone", onGone);
           if (contents.isCrashed()) {
             reject(new Error("Renderer stopped after load."));
-            return;
-          }
-          if (!usable) {
-            reject(new Error("The server page loaded empty."));
             return;
           }
           resolve();
         })
         .catch((inspectError: unknown) => {
+          contents.removeListener("render-process-gone", onGone);
           reject(inspectError instanceof Error ? inspectError : new Error(String(inspectError)));
         });
     };
@@ -255,6 +253,24 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
       },
     );
   });
+}
+
+/**
+ * Empty `#root` shells count as loaded HTML but are not a usable app. Wait until
+ * React (or an e2e `<main>` fixture) mounts visible content.
+ */
+async function waitForMountedAppDocument(contents: Electron.WebContents) {
+  const deadline = Date.now() + 8_000;
+  while (Date.now() < deadline) {
+    if (contents.isCrashed()) throw new Error("Renderer stopped after load.");
+    const state = (await contents.executeJavaScript(`({
+      rootChildren: document.getElementById("root")?.childElementCount ?? 0,
+      mainText: (document.querySelector("main")?.textContent ?? "").trim().length
+    })`)) as { rootChildren: number; mainText: number };
+    if (state.rootChildren > 0 || state.mainText > 0) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error("The server page did not become ready.");
 }
 
 async function installBundledRenderer(
@@ -509,6 +525,7 @@ function openFailureDetail(error: unknown): string {
     if (
       message.startsWith("The server answered with HTTP") ||
       message.startsWith("The server page loaded empty") ||
+      message.startsWith("The server page did not become ready") ||
       message.startsWith("Renderer stopped") ||
       message.startsWith("Page failed to load")
     ) {
@@ -575,6 +592,7 @@ function abandonPendingAppSwitch(
     // If setup was already closed (e.g. during a slow write), make the restored
     // session visible — otherwise macOS can be left with no shown window.
     if (setupWindow === null || setupWindow.isDestroyed()) {
+      clearTimeout(warmWindowTimer);
       previous.show();
       previous.focus();
     }
