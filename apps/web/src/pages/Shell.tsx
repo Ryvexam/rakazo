@@ -896,7 +896,9 @@ export function ShellPage() {
   );
   const shellReady =
     initialBotsLoaded &&
-    (inGroup ? Boolean(activeGroup && activeSnapshot) : Boolean(active && activeSnapshot));
+    (inGroup
+      ? Boolean(activeGroup && activeSnapshot)
+      : bots.length === 0 || Boolean(active && activeSnapshot));
   const refreshThreadRef = useRef(refreshThread);
   refreshThreadRef.current = refreshThread;
   const refreshGroupThreadRef = useRef(refreshGroupThread);
