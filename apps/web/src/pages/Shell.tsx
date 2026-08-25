@@ -1060,20 +1060,26 @@ export function ShellPage() {
       setSendError(null);
       try {
         await rpc.threads.stop({ groupId: groupTarget });
-        await refreshGroupThreadRef.current(groupTarget);
       } catch (error) {
-        setSendError(error instanceof Error ? error.message : "Failed to stop");
+        if (activeGroupId.current === groupTarget) {
+          setSendError(error instanceof Error ? error.message : "Failed to stop");
+        }
+        return;
       }
+      await refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
       return;
     }
     if (!botTarget) return;
     setSendError(null);
     try {
       await rpc.threads.stop({ botId: botTarget });
-      await refreshThreadRef.current(botTarget);
     } catch (error) {
-      setSendError(error instanceof Error ? error.message : "Failed to stop");
+      if (activeBotId.current === botTarget) {
+        setSendError(error instanceof Error ? error.message : "Failed to stop");
+      }
+      return;
     }
+    await refreshThreadRef.current(botTarget).catch(() => undefined);
   }, []);
   const stopTeaching = useCallback(async () => {
     const id = activeBotId.current;
@@ -2368,7 +2374,10 @@ export function ShellPage() {
             </div>
           </div>
           {sendError ? (
-            <div className="border-b border-[#5A2A2A] bg-[#2A1717] px-[18px] py-2 text-[13px] text-[#F1A8A8]">
+            <div
+              role="alert"
+              className="border-b border-[#5A2A2A] bg-[#2A1717] px-[18px] py-2 text-[13px] text-[#F1A8A8]"
+            >
               {sendError}
             </div>
           ) : null}
