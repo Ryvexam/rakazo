@@ -75,8 +75,9 @@ function legacyDefaultSessionFlag(partition: string) {
 }
 
 /**
- * Prefer the default session for origins that already have cookies there so
- * upgrades keep localStorage/IndexedDB. New origins get an isolated partition.
+ * Prefer the default session when that origin already has cookies or site
+ * storage there, so upgrades keep localStorage/IndexedDB. Fresh origins get
+ * an isolated partition.
  */
 async function resolveSessionForTarget(targetUrl: string) {
   const partition = sessionPartitionKey(targetUrl);
@@ -95,10 +96,66 @@ async function resolveSessionForTarget(targetUrl: string) {
         return { partition: null, value: session.defaultSession };
       }
     } catch {
-      // Fall through to an isolated partition.
+      // Continue with a storage probe when the profile looks pre-partition.
+    }
+    if (defaultSessionProfileExists() && (await defaultSessionHasOriginData(origin))) {
+      try {
+        await writeFile(legacyDefaultSessionFlag(partition), new Date().toISOString(), "utf8");
+      } catch {
+        // Flag is best-effort; still stay on the default session this launch.
+      }
+      return { partition: null, value: session.defaultSession };
     }
   }
   return { partition, value: session.fromPartition(partition) };
+}
+
+function defaultSessionProfileExists() {
+  const root = app.getPath("userData");
+  return (
+    existsSync(path.join(root, "Local Storage")) ||
+    existsSync(path.join(root, "IndexedDB")) ||
+    existsSync(path.join(root, "Cookies")) ||
+    existsSync(path.join(root, "Network", "Cookies")) ||
+    existsSync(path.join(root, "Cache Storage"))
+  );
+}
+
+/** Page storage in the default session means a pre-partition install for this origin. */
+async function defaultSessionHasOriginData(origin: string): Promise<boolean> {
+  const probe = new BrowserWindow({
+    show: false,
+    width: 1,
+    height: 1,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  try {
+    await probe.loadURL(origin);
+    return (await probe.webContents.executeJavaScript(`(async () => {
+      if (localStorage.length > 0 || sessionStorage.length > 0) return true;
+      if (typeof indexedDB !== "undefined" && indexedDB.databases) {
+        try {
+          const databases = await indexedDB.databases();
+          if (databases.length > 0) return true;
+        } catch {}
+      }
+      if (typeof caches !== "undefined") {
+        try {
+          const keys = await caches.keys();
+          if (keys.length > 0) return true;
+        } catch {}
+      }
+      return false;
+    })()`)) as boolean;
+  } catch {
+    return false;
+  } finally {
+    if (!probe.isDestroyed()) probe.destroy();
+  }
 }
 
 function createWindow(url: string, partition: string | null) {
@@ -787,13 +844,13 @@ app.whenReady().then(async () => {
           currentTargetUrl = previousUrl;
           if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.destroy();
           mainWindow = null;
-          return {
-            ok: false,
-            error:
-              previousSetup !== null
-                ? "Could not open that server. Renderer stopped. The previous instance was restored for the next launch."
-                : "Could not open that server. Renderer stopped.",
-          };
+          const message =
+            previousSetup !== null
+              ? "Could not open that server. Renderer stopped. The previous instance was restored for the next launch."
+              : "Could not open that server. Renderer stopped.";
+          // Setup may already be closed (user dismissed it during write); reopen it.
+          showSetupWindow(message);
+          return { ok: false, error: message };
         }
       } catch {
         const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
