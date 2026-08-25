@@ -62,11 +62,10 @@ import {
   X,
 } from "lucide-react";
 import {
-  type Dispatch,
   lazy,
+  type MutableRefObject,
   memo,
   type RefObject,
-  type SetStateAction,
   Suspense,
   useCallback,
   useEffect,
@@ -99,12 +98,14 @@ import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc } from "../lib/rpc";
 import {
   activeThreadRuns,
+  clearActiveThreadRuns,
   computerPanelAutoBoot,
   computerTakeoverBlocked,
   isComputerStatusEvent,
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
   prependThreadMessagePage,
+  reconcileRefreshedThread,
   reduceComputerStatus,
   reduceThreadSnapshot,
   userHoldsComputerControl,
@@ -178,6 +179,7 @@ export function ShellPage() {
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
+  const snapshotRef = useRef<ThreadSnapshot | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
   const [sending, setSending] = useState(false);
@@ -191,6 +193,23 @@ export function ShellPage() {
   const [taughtSkillsBotId, setTaughtSkillsBotId] = useState<string | null>(null);
   const [teachBusy, setTeachBusy] = useState(false);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
+  const computerRef = useRef<ComputerStatus | null>(null);
+  const threadRefreshEpoch = useRef(0);
+  const groupRefreshEpoch = useRef(0);
+
+  function commitSnapshot(next: ThreadSnapshot | null) {
+    snapshotRef.current = next;
+    setSnapshot(next);
+  }
+
+  function commitComputer(next: ComputerStatus | null) {
+    computerRef.current = next;
+    setComputer(next);
+  }
+
+  function updateSnapshot(update: (prev: ThreadSnapshot | null) => ThreadSnapshot | null) {
+    commitSnapshot(update(snapshotRef.current));
+  }
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
@@ -369,13 +388,14 @@ export function ShellPage() {
       !scrollElement ||
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 80;
     markOnce("rk:renderer:thread-request-start");
+    const request = ++groupRefreshEpoch.current;
     const snap = await rpc.threads.get({ groupId: id });
     markOnce("rk:renderer:thread-response");
-    if (activeGroupId.current !== id) return snap;
-    setSnapshot((prev) =>
+    if (activeGroupId.current !== id || request !== groupRefreshEpoch.current) return snap;
+    updateSnapshot((prev) =>
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
-    setComputer(null);
+    commitComputer(null);
     setRoutines([]);
     setRoutinesBotId(null);
     if (stickToEnd) {
@@ -396,38 +416,56 @@ export function ShellPage() {
     const pin = pinnedAroundRef.current;
     const keepPin = pin?.botId === id;
     const epoch = historyEpoch.current;
-    const [snap, routines, skills] = await Promise.all([
-      rpc.threads.get({ botId: id }),
-      rpc.routines.list({ botId: id }),
-      rpc.skills.list({ botId: id }),
-      refreshComputerScreen(id),
-    ]);
+    const request = ++threadRefreshEpoch.current;
+    // Apply threads.get as soon as it returns so stop/takeover status is not held behind
+    // routines/skills/screen fetches (progress can advance the cursor meanwhile).
+    const snap = await rpc.threads.get({ botId: id });
     markOnce("rk:renderer:thread-response");
-    // The epoch check drops a response that raced a conversation clear, which would otherwise
-    // re-apply the deleted messages and cursor over the emptied snapshot.
-    if (activeBotId.current !== id || epoch !== historyEpoch.current) return snap;
-    setSnapshot((prev) => {
-      let merged = mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId);
-      if (keepPin && merged) {
-        merged = {
-          ...merged,
-          messages: pin.messages,
-          olderCursor: pin.olderCursor,
-        };
-      }
-      return merged;
-    });
-    setComputer(snap.computer ?? null);
-    setRoutines(routines);
-    setRoutinesBotId(id);
-    setTaughtSkills(skills);
-    setTaughtSkillsBotId(id);
+    if (
+      activeBotId.current !== id ||
+      epoch !== historyEpoch.current ||
+      request !== threadRefreshEpoch.current
+    ) {
+      return snap;
+    }
+    const reconciled = reconcileRefreshedThread(
+      snapshotRef.current,
+      snap,
+      computerRef.current,
+      expandedHistoryThread.current === snap.threadId,
+    );
+    let merged = reconciled.snapshot;
+    if (keepPin && merged) {
+      merged = {
+        ...merged,
+        messages: pin.messages,
+        olderCursor: pin.olderCursor,
+      };
+    }
+    commitSnapshot(merged);
+    commitComputer(reconciled.computer);
     if (!keepPin && stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop = element.scrollHeight;
       });
     }
+    const [routines, skills] = await Promise.all([
+      rpc.routines.list({ botId: id }),
+      rpc.skills.list({ botId: id }),
+      refreshComputerScreen(id),
+    ]);
+    if (
+      activeBotId.current !== id ||
+      epoch !== historyEpoch.current ||
+      request !== threadRefreshEpoch.current
+    ) {
+      return snap;
+    }
+    setRoutines(routines);
+    setRoutinesBotId(id);
+    setTaughtSkills(skills);
+    setTaughtSkillsBotId(id);
     return snap;
   }
 
@@ -477,7 +515,7 @@ export function ShellPage() {
       )
         return;
       expandedHistoryThread.current = page.threadId;
-      setSnapshot((prev) => prependThreadMessagePage(prev, page));
+      updateSnapshot((prev) => prependThreadMessagePage(prev, page));
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -513,8 +551,8 @@ export function ShellPage() {
         setInitialBotsLoaded(true);
         if (!groupId && bootstrap.thread) {
           bootstrappedThread.current = bootstrap.thread;
-          setSnapshot(bootstrap.thread);
-          setComputer(bootstrap.thread.computer ?? null);
+          commitSnapshot(bootstrap.thread);
+          commitComputer(bootstrap.thread.computer ?? null);
           setRoutines(bootstrap.routines);
           setRoutinesBotId(bootstrap.thread.botId ?? null);
           markOnce("rk:renderer:bots-response");
@@ -648,7 +686,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
-            applyThreadEvent(event, setSnapshot, setComputer);
+            applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef);
             if (event.type === "thread.cleared") {
               expandedHistoryThread.current = null;
               pinnedAroundRef.current = null;
@@ -672,9 +710,6 @@ export function ShellPage() {
               if (event.payload.role === "bot") markBotReadIfVisible(active.id);
             }
             if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
-              void refreshThread(active.id).catch(() => undefined);
-            } else if (event.type === "computer.takeover.requested") {
-              // Clears busyBotName so Take control stays enabled for waiting_takeover.
               void refreshThread(active.id).catch(() => undefined);
             } else if (isComputerStatusEvent(event)) {
               void refreshComputerScreen(active.id).catch(() => undefined);
@@ -738,7 +773,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
-            applyThreadEvent(event, setSnapshot, setComputer);
+            applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef);
             if (event.type === "thread.message.created" && event.payload.role === "bot") {
               readVisibleGroups.current.delete(groupId);
               markVisibleGroupRead();
@@ -830,12 +865,12 @@ export function ShellPage() {
       messages: page.messages,
       olderCursor: page.olderCursor,
     };
-    setSnapshot({
+    commitSnapshot({
       ...snap,
       messages: page.messages,
       olderCursor: page.olderCursor,
     });
-    setComputer(snap.computer ?? null);
+    commitComputer(snap.computer ?? null);
     setRoutines(await rpc.routines.list({ botId }));
     setRoutinesBotId(botId);
     window.requestAnimationFrame(() => {
@@ -1073,6 +1108,12 @@ export function ShellPage() {
         }
         return;
       }
+      // Stop has no terminal event; clear run UI before refresh races with in-flight gets.
+      if (activeGroupId.current === groupTarget) {
+        updateSnapshot((prev) =>
+          prev && prev.groupId === groupTarget ? clearActiveThreadRuns(prev) : prev,
+        );
+      }
       await refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
       return;
     }
@@ -1085,6 +1126,19 @@ export function ShellPage() {
         setSendError(error instanceof Error ? error.message : "Failed to stop");
       }
       return;
+    }
+    // Stop does not emit a terminal thread event. Clear local run/busy immediately so a
+    // superseded in-flight refresh (older cursor) cannot leave Stop enabled / Take control
+    // blocked while the API is already idle.
+    if (activeBotId.current === botTarget) {
+      updateSnapshot((prev) => {
+        if (!prev || (prev.botId !== botTarget && prev.botId)) return prev;
+        return clearActiveThreadRuns(prev);
+      });
+      const currentComputer = computerRef.current;
+      if (currentComputer?.busyBotName) {
+        commitComputer({ ...currentComputer, busyBotName: null });
+      }
     }
     await refreshThreadRef.current(botTarget).catch(() => undefined);
   }, []);
@@ -2242,7 +2296,7 @@ export function ShellPage() {
                 expandedHistoryThread.current = null;
                 pinnedAroundRef.current = null;
                 historyEpoch.current += 1;
-                setSnapshot((current) =>
+                updateSnapshot((current) =>
                   current ? { ...current, messages: [], olderCursor: null, run: null } : current,
                 );
               }
@@ -2836,14 +2890,18 @@ function firstThreadRoute(
 
 function applyThreadEvent(
   event: ProductEvent,
-  setSnapshot: Dispatch<SetStateAction<ThreadSnapshot | null>>,
-  setComputer: Dispatch<SetStateAction<ComputerStatus | null>>,
+  commitSnapshot: (next: ThreadSnapshot | null) => void,
+  commitComputer: (next: ComputerStatus | null) => void,
+  snapshotRef: MutableRefObject<ThreadSnapshot | null>,
+  computerRef: MutableRefObject<ComputerStatus | null>,
 ) {
   if (isThreadSnapshotEvent(event)) {
-    setSnapshot((prev) => reduceThreadSnapshot(prev, event));
+    const next = reduceThreadSnapshot(snapshotRef.current, event);
+    commitSnapshot(next);
   }
   if (isComputerStatusEvent(event)) {
-    setComputer((prev) => reduceComputerStatus(prev, event));
+    const next = reduceComputerStatus(computerRef.current, event);
+    commitComputer(next);
   }
 }
 

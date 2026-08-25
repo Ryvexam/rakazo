@@ -1,6 +1,7 @@
 import type {
   ComputerStatus,
   ProductEvent,
+  Run,
   RunStatus,
   ThreadMessage,
   ThreadMessagePage,
@@ -15,6 +16,35 @@ import {
   reduceLiveMessageBlocks,
   subagentBlockFromPayload,
 } from "@rakazo/core";
+
+const runTriggers = new Set<Run["trigger"]>([
+  "user",
+  "routine",
+  "resume",
+  "follow_up",
+  "spawn",
+  "skill",
+]);
+
+function runFromStartedEvent(event: ProductEvent, previous: Run | undefined): Run {
+  const trigger = event.payload.trigger;
+  return {
+    id: event.runId ?? previous?.id ?? event.id,
+    botId: event.botId,
+    threadId: event.threadId,
+    taskId: previous?.taskId ?? event.runId ?? event.id,
+    status: "running",
+    trigger:
+      typeof trigger === "string" && runTriggers.has(trigger as Run["trigger"])
+        ? (trigger as Run["trigger"])
+        : (previous?.trigger ?? "user"),
+    modelProvider: previous?.modelProvider ?? null,
+    modelId: previous?.modelId ?? null,
+    error: null,
+    startedAt: previous?.startedAt ?? event.createdAt,
+    completedAt: null,
+  };
+}
 
 function takeLiveMessage(
   messages: readonly ThreadMessage[],
@@ -46,12 +76,108 @@ export function activeThreadRuns(
   return snapshot?.activeRuns ?? (snapshot?.run ? [snapshot.run] : []);
 }
 
+export function clearActiveThreadRuns(snapshot: ThreadSnapshot): ThreadSnapshot {
+  const runIds = new Set(activeThreadRuns(snapshot).map((run) => run.id));
+  const computer = snapshot.computer?.busyBotName
+    ? { ...snapshot.computer, busyBotName: null }
+    : snapshot.computer;
+  return {
+    ...snapshot,
+    run: null,
+    activeRuns: [],
+    messages: snapshot.messages.filter(
+      (message) =>
+        !message.runId || !runIds.has(message.runId) || !message.id.startsWith("progress:"),
+    ),
+    computer,
+  };
+}
+
 export function mergeThreadSnapshot(
   prev: ThreadSnapshot | null,
   next: ThreadSnapshot,
   preserveLoadedHistory = false,
 ): ThreadSnapshot {
   return mergeThreadHistory(prev, next, preserveLoadedHistory);
+}
+
+/**
+ * Apply a threads.get refresh without clobbering newer event-sourced takeover state.
+ *
+ * A refresh that started earlier can still return running+busyBotName after the client
+ * already applied waiting_takeover. Cursor comparisons only apply within the same thread.
+ * Stop clears run/busy optimistically in the shell because it has no terminal event; an
+ * older-cursor refresh must keep that cleared local state (see Shell stopRun).
+ */
+export function reconcileRefreshedThread(
+  prev: ThreadSnapshot | null,
+  snap: ThreadSnapshot,
+  prevComputer: ComputerStatus | null,
+  preserveLoadedHistory = false,
+): { snapshot: ThreadSnapshot; computer: ComputerStatus | null } {
+  const sameThread = Boolean(prev && prev.threadId === snap.threadId);
+
+  if (sameThread && prev && snap.cursor < prev.cursor) {
+    // A subscription can advance the cursor with progress before the send-triggered refresh
+    // returns the new run record. Hydrate that matching run without rolling the transcript back.
+    // Optimistic stop removes the matching progress message, so an older refresh cannot revive it.
+    const refreshedRun = snap.run;
+    const hasMatchingLiveProgress = Boolean(
+      refreshedRun &&
+        prev.messages.some(
+          (message) =>
+            message.runId === refreshedRun.id && message.id === `progress:${refreshedRun.id}`,
+        ),
+    );
+    if (!prev.run && refreshedRun && hasMatchingLiveProgress) {
+      return {
+        snapshot: {
+          ...prev,
+          run: refreshedRun,
+          activeRuns: snap.activeRuns,
+          computer: snap.computer,
+        },
+        computer: snap.computer ?? null,
+      };
+    }
+    // Progress can advance the thread cursor while embedded computer status from threads.get
+    // is still useful — but only while a live run remains. Preserve event-sourced
+    // waiting_takeover clears and optimistic stop clears.
+    const preserveLocalComputer =
+      prev.run?.status === "waiting_takeover" ||
+      !prev.run ||
+      !isActive(prev.run.status as RunStatus);
+    return {
+      snapshot: prev,
+      computer: preserveLocalComputer ? prevComputer : (snap.computer ?? null),
+    };
+  }
+
+  let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);
+  let computer = snap.computer ?? null;
+
+  const localWaiting =
+    sameThread &&
+    prev?.run?.status === "waiting_takeover" &&
+    snapshot.run?.id === prev.run.id &&
+    snapshot.run.status !== "waiting_takeover" &&
+    isActive(snapshot.run.status as RunStatus);
+
+  if (localWaiting && snapshot.run) {
+    const runId = snapshot.run.id;
+    snapshot = {
+      ...snapshot,
+      run: { ...snapshot.run, status: "waiting_takeover" },
+      activeRuns: snapshot.activeRuns?.map((run) =>
+        run.id === runId ? { ...run, status: "waiting_takeover" } : run,
+      ),
+    };
+    if (computer?.busyBotName) computer = { ...computer, busyBotName: null };
+  } else if (snapshot.run?.status === "waiting_takeover" && computer?.busyBotName) {
+    computer = { ...computer, busyBotName: null };
+  }
+
+  return { snapshot, computer };
 }
 
 export function prependThreadMessagePage(
@@ -71,6 +197,7 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "thread.message.updated" ||
     event.type === "run.started" ||
     event.type === "run.waiting_input" ||
+    event.type === "computer.takeover.requested" ||
     isRunTerminalEvent(event)
   );
 }
@@ -91,29 +218,48 @@ export function reduceThreadSnapshot(
     };
   }
   if (event.type === "run.started") {
+    if (!event.runId) {
+      return {
+        ...prev,
+        cursor: event.seq,
+        members: updateMemberStatus(prev.members, event.botId, "running"),
+      };
+    }
+    const previousRun =
+      prev.activeRuns?.find((candidate) => candidate.id === event.runId) ??
+      (prev.run?.id === event.runId ? prev.run : undefined);
+    const run = runFromStartedEvent(event, previousRun);
+    const without = (prev.activeRuns ?? (prev.run ? [prev.run] : [])).filter(
+      (candidate) => candidate.id !== run.id,
+    );
+    // Bot threads keep a single primary run; groups accumulate concurrent member runs.
+    const activeRuns = prev.groupId ? [...without, run] : [run];
     return {
       ...prev,
       cursor: event.seq,
       members: updateMemberStatus(prev.members, event.botId, "running"),
+      run,
+      activeRuns,
     };
   }
-  if (event.type === "run.waiting_input") {
+  if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
+    const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";
     const runChanged = Boolean(
-      prev.run && prev.run.id === event.runId && prev.run.status !== "waiting_input",
+      prev.run && prev.run.id === event.runId && prev.run.status !== status,
     );
     const activeRunChanged = prev.activeRuns?.some(
-      (candidate) => candidate.id === event.runId && candidate.status !== "waiting_input",
+      (candidate) => candidate.id === event.runId && candidate.status !== status,
     );
-    const members = updateMemberStatus(prev.members, event.botId, "waiting_input");
+    const members = updateMemberStatus(prev.members, event.botId, status);
     if (!runChanged && !activeRunChanged && members === prev.members) return prev;
     return {
       ...prev,
       cursor: event.seq,
       members,
-      run: runChanged && prev.run ? { ...prev.run, status: "waiting_input" } : prev.run,
+      run: runChanged && prev.run ? { ...prev.run, status } : prev.run,
       activeRuns: activeRunChanged
         ? prev.activeRuns?.map((candidate) =>
-            candidate.id === event.runId ? { ...candidate, status: "waiting_input" } : candidate,
+            candidate.id === event.runId ? { ...candidate, status } : candidate,
           )
         : prev.activeRuns,
     };
