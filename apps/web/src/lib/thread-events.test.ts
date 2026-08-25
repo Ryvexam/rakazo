@@ -12,6 +12,7 @@ import {
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
   prependThreadMessagePage,
+  reconcileRefreshedThread,
   reduceComputerStatus,
   reduceThreadSnapshot,
   userHoldsComputerControl,
@@ -226,6 +227,56 @@ describe("thread event reduction", () => {
 
     expect(waiting?.run?.status).toBe("waiting_takeover");
     expect(waiting?.activeRuns?.[0]?.status).toBe("waiting_takeover");
+  });
+
+  it("keeps event-sourced waiting_takeover when a stale refresh still shows the bot busy", () => {
+    const run = threadRun("run-1");
+    const waitingLocal: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 10,
+      run: { ...run, status: "waiting_takeover" },
+      activeRuns: [{ ...run, status: "waiting_takeover" }],
+    };
+    const staleRefresh: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 10,
+      run,
+      activeRuns: [run],
+      computer: computer({ state: "running", busyBotName: "Chief" }),
+    };
+
+    const reconciled = reconcileRefreshedThread(
+      waitingLocal,
+      staleRefresh,
+      computer({ state: "running", busyBotName: null }),
+    );
+
+    expect(reconciled.snapshot.run?.status).toBe("waiting_takeover");
+    expect(reconciled.computer?.busyBotName).toBeNull();
+    expect(computerTakeoverBlocked(reconciled.computer, reconciled.snapshot.run?.status)).toBe(
+      false,
+    );
+  });
+
+  it("ignores a refresh whose cursor is behind the event-sourced snapshot", () => {
+    const run = threadRun("run-1");
+    const newer: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 12,
+      run: { ...run, status: "waiting_takeover" },
+    };
+    const older: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 9,
+      run,
+      computer: computer({ busyBotName: "Chief" }),
+    };
+    const prevComputer = computer({ busyBotName: null });
+
+    const reconciled = reconcileRefreshedThread(newer, older, prevComputer);
+
+    expect(reconciled.snapshot).toBe(newer);
+    expect(reconciled.computer).toBe(prevComputer);
   });
 
   it("keeps group member status in sync with run lifecycle events", () => {

@@ -65,6 +65,7 @@ import {
   type Dispatch,
   lazy,
   memo,
+  type MutableRefObject,
   type RefObject,
   type SetStateAction,
   Suspense,
@@ -105,6 +106,7 @@ import {
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
   prependThreadMessagePage,
+  reconcileRefreshedThread,
   reduceComputerStatus,
   reduceThreadSnapshot,
   userHoldsComputerControl,
@@ -178,6 +180,8 @@ export function ShellPage() {
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
+  const snapshotRef = useRef<ThreadSnapshot | null>(null);
+  snapshotRef.current = snapshot;
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
   const [sending, setSending] = useState(false);
@@ -191,6 +195,8 @@ export function ShellPage() {
   const [taughtSkillsBotId, setTaughtSkillsBotId] = useState<string | null>(null);
   const [teachBusy, setTeachBusy] = useState(false);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
+  const computerRef = useRef<ComputerStatus | null>(null);
+  computerRef.current = computer;
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
@@ -406,18 +412,27 @@ export function ShellPage() {
     // The epoch check drops a response that raced a conversation clear, which would otherwise
     // re-apply the deleted messages and cursor over the emptied snapshot.
     if (activeBotId.current !== id || epoch !== historyEpoch.current) return snap;
-    setSnapshot((prev) => {
-      let merged = mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId);
-      if (keepPin && merged) {
-        merged = {
-          ...merged,
-          messages: pin.messages,
-          olderCursor: pin.olderCursor,
-        };
-      }
-      return merged;
-    });
-    setComputer(snap.computer ?? null);
+    // Reconcile against the latest event-sourced state before setState. A refresh started
+    // after send (especially with the computer panel open) can return after takeover.requested
+    // was applied; overwriting would re-disable Take control with no event left to replay.
+    const reconciled = reconcileRefreshedThread(
+      snapshotRef.current,
+      snap,
+      computerRef.current,
+      expandedHistoryThread.current === snap.threadId,
+    );
+    let merged = reconciled.snapshot;
+    if (keepPin && merged) {
+      merged = {
+        ...merged,
+        messages: pin.messages,
+        olderCursor: pin.olderCursor,
+      };
+    }
+    snapshotRef.current = merged;
+    computerRef.current = reconciled.computer;
+    setSnapshot(merged);
+    setComputer(reconciled.computer);
     setRoutines(routines);
     setRoutinesBotId(id);
     setTaughtSkills(skills);
@@ -648,7 +663,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
-            applyThreadEvent(event, setSnapshot, setComputer);
+            applyThreadEvent(event, setSnapshot, setComputer, snapshotRef, computerRef);
             if (event.type === "thread.cleared") {
               expandedHistoryThread.current = null;
               pinnedAroundRef.current = null;
@@ -735,7 +750,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
-            applyThreadEvent(event, setSnapshot, setComputer);
+            applyThreadEvent(event, setSnapshot, setComputer, snapshotRef, computerRef);
             if (event.type === "thread.message.created" && event.payload.role === "bot") {
               readVisibleGroups.current.delete(groupId);
               markVisibleGroupRead();
@@ -2835,12 +2850,26 @@ function applyThreadEvent(
   event: ProductEvent,
   setSnapshot: Dispatch<SetStateAction<ThreadSnapshot | null>>,
   setComputer: Dispatch<SetStateAction<ComputerStatus | null>>,
+  snapshotRef?: MutableRefObject<ThreadSnapshot | null>,
+  computerRef?: MutableRefObject<ComputerStatus | null>,
 ) {
   if (isThreadSnapshotEvent(event)) {
-    setSnapshot((prev) => reduceThreadSnapshot(prev, event));
+    if (snapshotRef) {
+      const next = reduceThreadSnapshot(snapshotRef.current, event);
+      snapshotRef.current = next;
+      setSnapshot(next);
+    } else {
+      setSnapshot((prev) => reduceThreadSnapshot(prev, event));
+    }
   }
   if (isComputerStatusEvent(event)) {
-    setComputer((prev) => reduceComputerStatus(prev, event));
+    if (computerRef) {
+      const next = reduceComputerStatus(computerRef.current, event);
+      computerRef.current = next;
+      setComputer(next);
+    } else {
+      setComputer((prev) => reduceComputerStatus(prev, event));
+    }
   }
 }
 

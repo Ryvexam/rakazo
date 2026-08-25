@@ -54,6 +54,51 @@ export function mergeThreadSnapshot(
   return mergeThreadHistory(prev, next, preserveLoadedHistory);
 }
 
+/**
+ * Apply a threads.get refresh without clobbering newer event-sourced takeover state.
+ *
+ * `computer.takeover.requested` is published before the run row flips to waiting_takeover.
+ * A refresh started earlier (e.g. after send, while the computer panel keeps screen URL
+ * fetch slow) can return running+busyBotName after the client already applied the event.
+ * The subscribe cursor has already advanced past that event, so overwriting would leave
+ * Take control disabled until another refresh happens to land after the status flip.
+ */
+export function reconcileRefreshedThread(
+  prev: ThreadSnapshot | null,
+  snap: ThreadSnapshot,
+  prevComputer: ComputerStatus | null,
+  preserveLoadedHistory = false,
+): { snapshot: ThreadSnapshot; computer: ComputerStatus | null } {
+  if (prev && snap.cursor < prev.cursor) {
+    return { snapshot: prev, computer: prevComputer };
+  }
+
+  let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);
+  let computer = snap.computer ?? null;
+
+  const localWaiting =
+    prev?.run?.status === "waiting_takeover" &&
+    snapshot.run?.id === prev.run.id &&
+    snapshot.run.status !== "waiting_takeover" &&
+    isActive(snapshot.run.status as RunStatus);
+
+  if (localWaiting && snapshot.run) {
+    const runId = snapshot.run.id;
+    snapshot = {
+      ...snapshot,
+      run: { ...snapshot.run, status: "waiting_takeover" },
+      activeRuns: snapshot.activeRuns?.map((run) =>
+        run.id === runId ? { ...run, status: "waiting_takeover" } : run,
+      ),
+    };
+    if (computer?.busyBotName) computer = { ...computer, busyBotName: null };
+  } else if (snapshot.run?.status === "waiting_takeover" && computer?.busyBotName) {
+    computer = { ...computer, busyBotName: null };
+  }
+
+  return { snapshot, computer };
+}
+
 export function prependThreadMessagePage(
   prev: ThreadSnapshot | null,
   page: ThreadMessagePage,
