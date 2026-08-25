@@ -57,11 +57,10 @@ export function mergeThreadSnapshot(
 /**
  * Apply a threads.get refresh without clobbering newer event-sourced takeover state.
  *
- * `computer.takeover.requested` is published before the run row flips to waiting_takeover.
- * A refresh started earlier (e.g. after send, while the computer panel keeps screen URL
- * fetch slow) can return running+busyBotName after the client already applied the event.
- * The subscribe cursor has already advanced past that event, so overwriting would leave
- * Take control disabled until another refresh happens to land after the status flip.
+ * Takeover events are published with the waiting_takeover row, but a refresh that started
+ * earlier can still return running+busyBotName. Stop does not emit a terminal event, so a
+ * refresh that clears the active run must win even when progress events advanced the local
+ * cursor while a slow screen URL fetch kept Promise.all open.
  */
 export function reconcileRefreshedThread(
   prev: ThreadSnapshot | null,
@@ -69,8 +68,24 @@ export function reconcileRefreshedThread(
   prevComputer: ComputerStatus | null,
   preserveLoadedHistory = false,
 ): { snapshot: ThreadSnapshot; computer: ComputerStatus | null } {
+  const snapClearsActiveRun =
+    Boolean(prev?.run && isActive(prev.run.status as RunStatus)) &&
+    (snap.run == null || !isActive(snap.run.status as RunStatus));
+
   if (prev && snap.cursor < prev.cursor) {
-    return { snapshot: prev, computer: prevComputer };
+    if (!snapClearsActiveRun) {
+      return { snapshot: prev, computer: prevComputer };
+    }
+    // Keep newer event-sourced messages; adopt the cleared run/computer from stop refresh.
+    return {
+      snapshot: {
+        ...prev,
+        run: snap.run,
+        activeRuns: snap.activeRuns,
+        computer: snap.computer ?? prev.computer,
+      },
+      computer: snap.computer ?? null,
+    };
   }
 
   let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);

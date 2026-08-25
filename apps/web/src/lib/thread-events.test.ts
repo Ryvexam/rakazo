@@ -279,6 +279,36 @@ describe("thread event reduction", () => {
     expect(reconciled.computer).toBe(prevComputer);
   });
 
+  it("applies a stop refresh that clears the run even when progress advanced the cursor", () => {
+    const run = threadRun("run-1");
+    const localWithProgress: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 14,
+      run,
+      computer: computer({ state: "running", busyBotName: "Chief" }),
+    };
+    const stopRefresh: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 11,
+      run: null,
+      activeRuns: [],
+      computer: computer({ state: "running", busyBotName: null }),
+    };
+
+    const reconciled = reconcileRefreshedThread(
+      localWithProgress,
+      stopRefresh,
+      computer({ state: "running", busyBotName: "Chief" }),
+    );
+
+    expect(reconciled.snapshot.run).toBeNull();
+    expect(reconciled.snapshot.cursor).toBe(14);
+    expect(reconciled.computer?.busyBotName).toBeNull();
+    expect(computerTakeoverBlocked(reconciled.computer, reconciled.snapshot.run?.status)).toBe(
+      false,
+    );
+  });
+
   it("keeps group member status in sync with run lifecycle events", () => {
     const run = threadRun("run-1", "bot-member");
     const initial: ThreadSnapshot = {

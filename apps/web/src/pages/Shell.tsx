@@ -62,12 +62,10 @@ import {
   X,
 } from "lucide-react";
 import {
-  type Dispatch,
   lazy,
   type MutableRefObject,
   memo,
   type RefObject,
-  type SetStateAction,
   Suspense,
   useCallback,
   useEffect,
@@ -181,7 +179,6 @@ export function ShellPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const snapshotRef = useRef<ThreadSnapshot | null>(null);
-  snapshotRef.current = snapshot;
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
   const [sending, setSending] = useState(false);
@@ -196,7 +193,22 @@ export function ShellPage() {
   const [teachBusy, setTeachBusy] = useState(false);
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const computerRef = useRef<ComputerStatus | null>(null);
-  computerRef.current = computer;
+  const threadRefreshEpoch = useRef(0);
+  const groupRefreshEpoch = useRef(0);
+
+  function commitSnapshot(next: ThreadSnapshot | null) {
+    snapshotRef.current = next;
+    setSnapshot(next);
+  }
+
+  function commitComputer(next: ComputerStatus | null) {
+    computerRef.current = next;
+    setComputer(next);
+  }
+
+  function updateSnapshot(update: (prev: ThreadSnapshot | null) => ThreadSnapshot | null) {
+    commitSnapshot(update(snapshotRef.current));
+  }
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
@@ -375,13 +387,14 @@ export function ShellPage() {
       !scrollElement ||
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight < 80;
     markOnce("rk:renderer:thread-request-start");
+    const request = ++groupRefreshEpoch.current;
     const snap = await rpc.threads.get({ groupId: id });
     markOnce("rk:renderer:thread-response");
-    if (activeGroupId.current !== id) return snap;
-    setSnapshot((prev) =>
+    if (activeGroupId.current !== id || request !== groupRefreshEpoch.current) return snap;
+    updateSnapshot((prev) =>
       mergeThreadSnapshot(prev, snap, expandedHistoryThread.current === snap.threadId),
     );
-    setComputer(null);
+    commitComputer(null);
     setRoutines([]);
     setRoutinesBotId(null);
     if (stickToEnd) {
@@ -402,6 +415,7 @@ export function ShellPage() {
     const pin = pinnedAroundRef.current;
     const keepPin = pin?.botId === id;
     const epoch = historyEpoch.current;
+    const request = ++threadRefreshEpoch.current;
     const [snap, routines, skills] = await Promise.all([
       rpc.threads.get({ botId: id }),
       rpc.routines.list({ botId: id }),
@@ -411,7 +425,13 @@ export function ShellPage() {
     markOnce("rk:renderer:thread-response");
     // The epoch check drops a response that raced a conversation clear, which would otherwise
     // re-apply the deleted messages and cursor over the emptied snapshot.
-    if (activeBotId.current !== id || epoch !== historyEpoch.current) return snap;
+    if (
+      activeBotId.current !== id ||
+      epoch !== historyEpoch.current ||
+      request !== threadRefreshEpoch.current
+    ) {
+      return snap;
+    }
     // Reconcile against the latest event-sourced state before setState. A refresh started
     // after send (especially with the computer panel open) can return after takeover.requested
     // was applied; overwriting would re-disable Take control with no event left to replay.
@@ -429,10 +449,8 @@ export function ShellPage() {
         olderCursor: pin.olderCursor,
       };
     }
-    snapshotRef.current = merged;
-    computerRef.current = reconciled.computer;
-    setSnapshot(merged);
-    setComputer(reconciled.computer);
+    commitSnapshot(merged);
+    commitComputer(reconciled.computer);
     setRoutines(routines);
     setRoutinesBotId(id);
     setTaughtSkills(skills);
@@ -492,7 +510,7 @@ export function ShellPage() {
       )
         return;
       expandedHistoryThread.current = page.threadId;
-      setSnapshot((prev) => prependThreadMessagePage(prev, page));
+      updateSnapshot((prev) => prependThreadMessagePage(prev, page));
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop += element.scrollHeight - previousHeight;
@@ -528,8 +546,8 @@ export function ShellPage() {
         setInitialBotsLoaded(true);
         if (!groupId && bootstrap.thread) {
           bootstrappedThread.current = bootstrap.thread;
-          setSnapshot(bootstrap.thread);
-          setComputer(bootstrap.thread.computer ?? null);
+          commitSnapshot(bootstrap.thread);
+          commitComputer(bootstrap.thread.computer ?? null);
           setRoutines(bootstrap.routines);
           setRoutinesBotId(bootstrap.thread.botId ?? null);
           markOnce("rk:renderer:bots-response");
@@ -663,7 +681,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
-            applyThreadEvent(event, setSnapshot, setComputer, snapshotRef, computerRef);
+            applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef);
             if (event.type === "thread.cleared") {
               expandedHistoryThread.current = null;
               pinnedAroundRef.current = null;
@@ -750,7 +768,7 @@ export function ShellPage() {
             if (abort.signal.aborted) break;
             cursor = Math.max(cursor, event.seq);
             retryMs = 250;
-            applyThreadEvent(event, setSnapshot, setComputer, snapshotRef, computerRef);
+            applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef);
             if (event.type === "thread.message.created" && event.payload.role === "bot") {
               readVisibleGroups.current.delete(groupId);
               markVisibleGroupRead();
@@ -842,12 +860,12 @@ export function ShellPage() {
       messages: page.messages,
       olderCursor: page.olderCursor,
     };
-    setSnapshot({
+    commitSnapshot({
       ...snap,
       messages: page.messages,
       olderCursor: page.olderCursor,
     });
-    setComputer(snap.computer ?? null);
+    commitComputer(snap.computer ?? null);
     setRoutines(await rpc.routines.list({ botId }));
     setRoutinesBotId(botId);
     window.requestAnimationFrame(() => {
@@ -2254,7 +2272,7 @@ export function ShellPage() {
                 expandedHistoryThread.current = null;
                 pinnedAroundRef.current = null;
                 historyEpoch.current += 1;
-                setSnapshot((current) =>
+                updateSnapshot((current) =>
                   current ? { ...current, messages: [], olderCursor: null, run: null } : current,
                 );
               }
@@ -2848,28 +2866,18 @@ function firstThreadRoute(
 
 function applyThreadEvent(
   event: ProductEvent,
-  setSnapshot: Dispatch<SetStateAction<ThreadSnapshot | null>>,
-  setComputer: Dispatch<SetStateAction<ComputerStatus | null>>,
-  snapshotRef?: MutableRefObject<ThreadSnapshot | null>,
-  computerRef?: MutableRefObject<ComputerStatus | null>,
+  commitSnapshot: (next: ThreadSnapshot | null) => void,
+  commitComputer: (next: ComputerStatus | null) => void,
+  snapshotRef: MutableRefObject<ThreadSnapshot | null>,
+  computerRef: MutableRefObject<ComputerStatus | null>,
 ) {
   if (isThreadSnapshotEvent(event)) {
-    if (snapshotRef) {
-      const next = reduceThreadSnapshot(snapshotRef.current, event);
-      snapshotRef.current = next;
-      setSnapshot(next);
-    } else {
-      setSnapshot((prev) => reduceThreadSnapshot(prev, event));
-    }
+    const next = reduceThreadSnapshot(snapshotRef.current, event);
+    commitSnapshot(next);
   }
   if (isComputerStatusEvent(event)) {
-    if (computerRef) {
-      const next = reduceComputerStatus(computerRef.current, event);
-      computerRef.current = next;
-      setComputer(next);
-    } else {
-      setComputer((prev) => reduceComputerStatus(prev, event));
-    }
+    const next = reduceComputerStatus(computerRef.current, event);
+    commitComputer(next);
   }
 }
 
