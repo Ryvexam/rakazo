@@ -307,6 +307,9 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
     let parentHandle = await open(current, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
     try {
       for (const segment of segments.slice(0, -1)) {
+        // Re-bind the held parent immediately before create so a junction swap cannot
+        // redirect pathname mkdir outside the workspace.
+        current = await assertContainedDirectoryHandle(parentHandle, current, resolvedHome);
         const viaDirFd = childPathViaDirFd(parentHandle.fd, segment);
         const next = viaDirFd ?? path.join(current, segment);
         let created = false;
@@ -418,7 +421,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
     ) {
       throw new Error("Path escapes the computer workspace");
     }
-    await assertContainedFileHandle(handle, resolvedHome, parentHandle, containedParent);
+    await assertContainedFileHandle(handle, resolvedHome, parentHandle, containedParent, name);
     return handle;
   } catch (error) {
     if (created && handle) {
@@ -484,6 +487,7 @@ async function assertContainedFileHandle(
   resolvedHome: string,
   parentHandle: Awaited<ReturnType<typeof open>>,
   parentPath: string,
+  childName: string,
 ) {
   const opened = await handle.stat({ bigint: true });
   if (!opened.isFile() || opened.nlink !== 1n) {
@@ -496,17 +500,41 @@ async function assertContainedFileHandle(
     }
     return;
   }
-  // Pathname platforms: ensure the parent path still names the held parent inode.
-  // If it was swapped to a junction, the path inode diverges and we fail closed.
+  // Pathname platforms: the parent path must still name the held parent inode,
+  // and re-opening the child through that path must yield the same file. A
+  // junction swap for open + restore before the parent check would otherwise
+  // leave an outside handle while the parent path looks inside again.
   const parentOpened = await parentHandle.stat();
   const parentNow = await stat(parentPath);
   if (
     !parentNow.isDirectory() ||
     parentNow.dev !== parentOpened.dev ||
-    parentNow.ino !== parentOpened.ino ||
-    !isAllowedDesktopPath(await realpath(parentPath), [resolvedHome])
+    parentNow.ino !== parentOpened.ino
   ) {
     throw new Error("Path escapes the computer workspace");
+  }
+  const parentReal = await realpath(parentPath);
+  if (!isAllowedDesktopPath(parentReal, [resolvedHome])) {
+    throw new Error("Path escapes the computer workspace");
+  }
+  const verifyPath = path.join(parentReal, childName);
+  const verify = await open(verifyPath, constants.O_RDONLY | O_NOFOLLOW);
+  try {
+    const verified = await verify.stat({ bigint: true });
+    const named = await lstat(verifyPath, { bigint: true });
+    if (
+      !verified.isFile() ||
+      !named.isFile() ||
+      named.isSymbolicLink() ||
+      verified.dev !== opened.dev ||
+      verified.ino !== opened.ino ||
+      named.dev !== opened.dev ||
+      named.ino !== opened.ino
+    ) {
+      throw new Error("Path escapes the computer workspace");
+    }
+  } finally {
+    await verify.close().catch(() => undefined);
   }
 }
 
