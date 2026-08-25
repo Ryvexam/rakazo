@@ -1,6 +1,7 @@
 import type {
   ComputerStatus,
   ProductEvent,
+  Run,
   RunStatus,
   ThreadMessage,
   ThreadMessagePage,
@@ -15,6 +16,34 @@ import {
   reduceLiveMessageBlocks,
   subagentBlockFromPayload,
 } from "@rakazo/core";
+
+const runTriggers = new Set<Run["trigger"]>([
+  "user",
+  "routine",
+  "resume",
+  "follow_up",
+  "spawn",
+  "skill",
+]);
+
+function runFromStartedEvent(event: ProductEvent, previous: Run | undefined): Run {
+  const trigger = event.payload.trigger;
+  return {
+    id: event.runId ?? previous?.id ?? event.id,
+    botId: event.botId,
+    threadId: event.threadId,
+    taskId: previous?.taskId ?? event.runId ?? event.id,
+    status: "running",
+    trigger: typeof trigger === "string" && runTriggers.has(trigger as Run["trigger"])
+      ? (trigger as Run["trigger"])
+      : (previous?.trigger ?? "user"),
+    modelProvider: previous?.modelProvider ?? null,
+    modelId: previous?.modelId ?? null,
+    error: null,
+    startedAt: previous?.startedAt ?? event.createdAt,
+    completedAt: null,
+  };
+}
 
 function takeLiveMessage(
   messages: readonly ThreadMessage[],
@@ -149,10 +178,28 @@ export function reduceThreadSnapshot(
     };
   }
   if (event.type === "run.started") {
+    if (!event.runId) {
+      return {
+        ...prev,
+        cursor: event.seq,
+        members: updateMemberStatus(prev.members, event.botId, "running"),
+      };
+    }
+    const previousRun =
+      prev.activeRuns?.find((candidate) => candidate.id === event.runId) ??
+      (prev.run?.id === event.runId ? prev.run : undefined);
+    const run = runFromStartedEvent(event, previousRun);
+    const without = (prev.activeRuns ?? (prev.run ? [prev.run] : [])).filter(
+      (candidate) => candidate.id !== run.id,
+    );
+    // Bot threads keep a single primary run; groups accumulate concurrent member runs.
+    const activeRuns = prev.groupId ? [...without, run] : [run];
     return {
       ...prev,
       cursor: event.seq,
       members: updateMemberStatus(prev.members, event.botId, "running"),
+      run,
+      activeRuns,
     };
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {

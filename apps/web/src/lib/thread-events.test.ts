@@ -212,6 +212,39 @@ describe("thread event reduction", () => {
     expect(isThreadSnapshotEvent(event({ type: "computer.takeover.requested" }))).toBe(true);
   });
 
+  it("event-sources the active run on run.started so Stop does not wait on threads.get", () => {
+    const initial = snapshot([]);
+    const started = reduceThreadSnapshot(
+      initial,
+      event({
+        type: "run.started",
+        seq: 3,
+        runId: "run-1",
+        payload: { trigger: "user" },
+      }),
+    );
+
+    expect(started?.run).toMatchObject({
+      id: "run-1",
+      botId: "bot-1",
+      status: "running",
+      trigger: "user",
+    });
+    expect(started?.activeRuns).toEqual([started?.run]);
+
+    const progressed = reduceThreadSnapshot(
+      started,
+      event({
+        type: "thread.progress",
+        seq: 4,
+        runId: "run-1",
+        payload: { delta: "still working" },
+      }),
+    );
+    expect(progressed?.run?.id).toBe("run-1");
+    expect(progressed?.cursor).toBe(4);
+  });
+
   it("marks the run as waiting when computer takeover is requested", () => {
     const run = threadRun("run-1");
     const initial: ThreadSnapshot = {
@@ -364,9 +397,12 @@ describe("thread event reduction", () => {
       event({ type: "run.started", botId: "bot-member", runId: run.id }),
     );
     expect(started?.members?.[0]?.status).toBe("running");
+    expect(started?.run?.id).toBe(run.id);
+    expect(started?.run?.status).toBe("running");
+    expect(started?.activeRuns?.map((item) => item.id)).toEqual([run.id]);
 
     const waiting = reduceThreadSnapshot(
-      { ...started!, run, activeRuns: [run] },
+      started!,
       event({
         type: "run.waiting_input",
         seq: 5,
