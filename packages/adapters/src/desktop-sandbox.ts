@@ -451,6 +451,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
         if (!hasErrorCode(error, "ENOENT")) throw error;
         handle = createExclusiveChildViaDirectoryFdWin32(parentHandle.fd, name);
         created = true;
+        await handle.chmod(mode).catch(() => undefined);
       }
       try {
         openedPath = pathFromDirectoryFd(handle.fd);
