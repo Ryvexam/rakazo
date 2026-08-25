@@ -124,9 +124,31 @@ describe("reduceUpdateState", () => {
     expect(state.message).toContain("Restart Rakazo");
   });
 
-  it("clamps progress to a percentage", () => {
-    expect(apply([{ type: "progress", percent: -5 }]).percent).toBe(0);
-    expect(apply([{ type: "progress", percent: 250 }]).percent).toBe(100);
+  it("clamps progress to a percentage while downloading", () => {
+    expect(
+      apply([{ type: "available", version: "0.2.0" }, { type: "progress", percent: -5 }]).percent,
+    ).toBe(0);
+    expect(
+      apply([
+        { type: "available", version: "0.2.0" },
+        { type: "download-start" },
+        { type: "progress", percent: 250 },
+      ]).percent,
+    ).toBe(100);
+  });
+
+  it("ignores progress outside an active download", () => {
+    expect(apply([{ type: "progress", percent: 40 }])).toMatchObject({
+      phase: "idle",
+      percent: null,
+    });
+    expect(
+      apply([
+        { type: "check-start" },
+        { type: "failed", error: new Error("network down"), userInitiated: true },
+        { type: "progress", percent: 50 },
+      ]),
+    ).toMatchObject({ phase: "error", percent: null });
   });
 
   it("clears an offer when a completed check finds nothing", () => {

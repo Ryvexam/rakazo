@@ -128,7 +128,9 @@ export function reduceUpdateState(
       if (state.phase === "ready") return state;
       return { ...state, phase: "downloading", percent: 0, message: null };
     case "progress":
-      if (state.phase === "ready") return state;
+      // Only advance while a download is expected; late progress after error/idle
+      // must not force the UI back into downloading.
+      if (state.phase !== "available" && state.phase !== "downloading") return state;
       return {
         ...state,
         phase: "downloading",
