@@ -4,11 +4,9 @@ import vm from "node:vm";
 import type { RakazoDesktop, RakazoSetup } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-function runPreload(
-  file: string,
-  ipc: { invoke?: unknown; on?: unknown; off?: unknown } = {},
-) {
-  const invoke = (ipc.invoke as ReturnType<typeof vi.fn>) ?? vi.fn(async (channel: string) => ({ channel }));
+function runPreload(file: string, ipc: { invoke?: unknown; on?: unknown; off?: unknown } = {}) {
+  const invoke =
+    (ipc.invoke as ReturnType<typeof vi.fn>) ?? vi.fn(async (channel: string) => ({ channel }));
   const on = (ipc.on as ReturnType<typeof vi.fn>) ?? vi.fn();
   const off = (ipc.off as ReturnType<typeof vi.fn>) ?? vi.fn();
   const exposeInMainWorld = vi.fn();
