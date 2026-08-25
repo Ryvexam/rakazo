@@ -36,9 +36,20 @@ import {
   placeholderObservation,
 } from "./computer-support.js";
 import { isAllowedDesktopPath, normalizeDesktopWorkspacePath } from "./desktop-sandbox-paths.js";
-import { pathFromDirectoryFd } from "./desktop-sandbox-win32-path.js";
+import {
+  createExclusiveChildViaDirectoryFdWin32,
+  mkdirChildViaDirectoryFdWin32,
+  openChildDirectoryViaDirectoryFdWin32,
+  openExistingChildViaDirectoryFdWin32,
+  pathFromDirectoryFd,
+  win32NtRelativeAvailable,
+  type Win32FileHandle,
+} from "./desktop-sandbox-win32-path.js";
 
 const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
+
+/** Node FileHandle or Win32 duck-typed handle opened relative to a parent directory. */
+type ContainedHandle = Awaited<ReturnType<typeof open>> | Win32FileHandle;
 
 interface DesktopBox {
   ref: ComputerRef;
@@ -305,45 +316,77 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
     // redirect mkdir outside the workspace between validation and creation.
     const segments = normalized.split(/[/\\]/u).filter(Boolean);
     let current = resolvedHome;
-    let parentHandle = await open(current, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+    let parentHandle: ContainedHandle = await open(
+      current,
+      constants.O_RDONLY | (constants.O_DIRECTORY ?? 0),
+    );
+    const useWin32Relative = win32NtRelativeAvailable();
     try {
       for (const segment of segments.slice(0, -1)) {
         // Re-bind the held parent immediately before create so a junction swap cannot
         // redirect pathname mkdir outside the workspace.
         current = await assertContainedDirectoryHandle(parentHandle, current, resolvedHome);
-        const viaDirFd = childPathViaDirFd(parentHandle.fd, segment);
-        const next = viaDirFd ?? path.join(current, segment);
         let created: { path: string; dev: number; ino: number } | undefined;
         try {
-          await mkdir(next);
-          const createdStat = await stat(next);
-          created = { path: next, dev: createdStat.dev, ino: createdStat.ino };
+          if (useWin32Relative) {
+            const createdPath = mkdirChildViaDirectoryFdWin32(parentHandle.fd, segment);
+            if (createdPath) {
+              const createdStat = await stat(createdPath).catch(() => undefined);
+              if (createdStat?.isDirectory()) {
+                created = { path: createdPath, dev: createdStat.dev, ino: createdStat.ino };
+              }
+            }
+          } else {
+            const viaDirFd = childPathViaDirFd(parentHandle.fd, segment);
+            const next = viaDirFd ?? path.join(current, segment);
+            await mkdir(next);
+            const createdStat = await stat(next);
+            created = { path: next, dev: createdStat.dev, ino: createdStat.ino };
+          }
         } catch (error) {
           if (!hasErrorCode(error, "EEXIST")) throw error;
         }
         try {
-          const resolved = await realpath(next);
-          const before = await stat(resolved);
-          if (!isAllowedDesktopPath(resolved, [resolvedHome]) || !before.isDirectory()) {
-            throw new Error("Path escapes the computer workspace");
-          }
-          const nextHandle = await open(
-            resolved,
-            constants.O_RDONLY | (constants.O_DIRECTORY ?? 0),
-          );
-          try {
-            // Re-resolve after open so a junction swap cannot leave us holding an
-            // outside directory while still trusting the earlier inside pathname.
-            current = await assertContainedDirectoryHandle(
+          let nextHandle: ContainedHandle;
+          let before: { dev: number; ino: number; isDirectory(): boolean };
+          let resolved: string;
+          if (useWin32Relative) {
+            nextHandle = openChildDirectoryViaDirectoryFdWin32(parentHandle.fd, segment);
+            before = await nextHandle.stat();
+            if (!before.isDirectory()) {
+              await nextHandle.close().catch(() => undefined);
+              throw new Error("Path escapes the computer workspace");
+            }
+            resolved = await assertContainedDirectoryHandle(
               nextHandle,
-              resolved,
+              path.join(current, segment),
               resolvedHome,
               before,
             );
-          } catch (error) {
-            await nextHandle.close().catch(() => undefined);
-            throw error;
+          } else {
+            const viaDirFd = childPathViaDirFd(parentHandle.fd, segment);
+            const next = viaDirFd ?? path.join(current, segment);
+            resolved = await realpath(next);
+            before = await stat(resolved);
+            if (!isAllowedDesktopPath(resolved, [resolvedHome]) || !before.isDirectory()) {
+              throw new Error("Path escapes the computer workspace");
+            }
+            nextHandle = await open(resolved, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+            try {
+              // Re-resolve after open so a junction swap cannot leave us holding an
+              // outside directory while still trusting the earlier inside pathname.
+              resolved = await assertContainedDirectoryHandle(
+                nextHandle,
+                resolved,
+                resolvedHome,
+                before,
+              );
+            } catch (error) {
+              await nextHandle.close().catch(() => undefined);
+              throw error;
+            }
           }
+          current = resolved;
           await parentHandle.close().catch(() => undefined);
           parentHandle = nextHandle;
         } catch (error) {
@@ -383,11 +426,11 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
   }
   const parentBefore = await stat(parentReal);
   const parentHandle = await open(parentReal, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+  const useWin32Relative = win32NtRelativeAvailable();
 
-  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  let handle: ContainedHandle | undefined;
   let created = false;
   let openedPath = path.join(parentReal, name);
-  let viaDirFd: string | undefined;
   try {
     // Bind the parent handle to a still-contained realpath. Otherwise a swap
     // after the first realpath can make inode checks agree on an outside dir
@@ -399,21 +442,38 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
       parentBefore,
     );
 
-    // Prefer directory-fd relative opens so a parent path swap cannot redirect creates.
-    viaDirFd = childPathViaDirFd(parentHandle.fd, name);
-    openedPath = viaDirFd ?? path.join(containedParent, name);
+    if (useWin32Relative) {
+      // Open/create relative to the held parent HANDLE so a junction swap of the
+      // parent pathname cannot redirect the write (true openat-style on Windows).
+      try {
+        handle = openExistingChildViaDirectoryFdWin32(parentHandle.fd, name);
+      } catch (error) {
+        if (!hasErrorCode(error, "ENOENT")) throw error;
+        handle = createExclusiveChildViaDirectoryFdWin32(parentHandle.fd, name);
+        created = true;
+      }
+      try {
+        openedPath = pathFromDirectoryFd(handle.fd);
+      } catch {
+        openedPath = path.join(containedParent, name);
+      }
+    } else {
+      // Prefer directory-fd relative opens so a parent path swap cannot redirect creates.
+      const viaDirFd = childPathViaDirFd(parentHandle.fd, name);
+      openedPath = viaDirFd ?? path.join(containedParent, name);
 
-    try {
-      // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
-      handle = await open(openedPath, constants.O_WRONLY | O_NOFOLLOW);
-    } catch (error) {
-      if (!hasErrorCode(error, "ENOENT")) throw error;
-      handle = await open(
-        openedPath,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
-        mode,
-      );
-      created = true;
+      try {
+        // Opening without O_TRUNC makes following a Windows reparse point non-destructive.
+        handle = await open(openedPath, constants.O_WRONLY | O_NOFOLLOW);
+      } catch (error) {
+        if (!hasErrorCode(error, "ENOENT")) throw error;
+        handle = await open(
+          openedPath,
+          constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
+          mode,
+        );
+        created = true;
+      }
     }
 
     const opened = await handle.stat({ bigint: true });
@@ -435,13 +495,21 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
   } catch (error) {
     if (created && handle) {
       const createdStat = await handle.stat({ bigint: true }).catch(() => undefined);
+      let cleanupPath = openedPath;
+      if (useWin32Relative) {
+        try {
+          cleanupPath = pathFromDirectoryFd(handle.fd);
+        } catch {
+          // Keep openedPath when GetFinalPathName is unavailable.
+        }
+      }
       await handle.close().catch(() => undefined);
       handle = undefined;
       // Only unlink if the path still names the inode we created.
       if (createdStat) {
-        const present = await lstat(openedPath, { bigint: true }).catch(() => undefined);
+        const present = await lstat(cleanupPath, { bigint: true }).catch(() => undefined);
         if (present && present.dev === createdStat.dev && present.ino === createdStat.ino) {
-          await unlink(openedPath).catch(() => undefined);
+          await unlink(cleanupPath).catch(() => undefined);
         }
       }
     } else {
@@ -454,7 +522,7 @@ async function openContainedWorkspaceFile(home: string, target: string, mode: nu
 }
 
 async function assertContainedDirectoryHandle(
-  handle: Awaited<ReturnType<typeof open>>,
+  handle: ContainedHandle,
   pathToRecheck: string,
   resolvedHome: string,
   expected?: { dev: number; ino: number },
@@ -469,10 +537,15 @@ async function assertContainedDirectoryHandle(
   // Prefer fd-bound realpath so containment cannot diverge from the open handle.
   const resolved = await realpathFromFd(handle.fd);
   if (resolved) {
-    if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+    const named = await lstat(resolved).catch(() => undefined);
+    if (named?.isSymbolicLink() || !isAllowedDesktopPath(resolved, [resolvedHome])) {
       throw new Error("Path escapes the computer workspace");
     }
-    return resolved;
+    const fully = await realpath(resolved);
+    if (!isAllowedDesktopPath(fully, [resolvedHome])) {
+      throw new Error("Path escapes the computer workspace");
+    }
+    return fully;
   }
   // Pathname platforms: re-open the realpath immediately and require the same inode.
   const byPath = await realpath(pathToRecheck);
@@ -492,9 +565,9 @@ async function assertContainedDirectoryHandle(
 }
 
 async function assertContainedFileHandle(
-  handle: Awaited<ReturnType<typeof open>>,
+  handle: ContainedHandle,
   resolvedHome: string,
-  parentHandle: Awaited<ReturnType<typeof open>>,
+  parentHandle: ContainedHandle,
   parentPath: string,
   childName: string,
 ) {
@@ -504,7 +577,19 @@ async function assertContainedFileHandle(
   }
   const resolved = await realpathFromFd(handle.fd);
   if (resolved) {
-    if (!isAllowedDesktopPath(resolved, [resolvedHome])) {
+    const named = await lstat(resolved, { bigint: true });
+    if (
+      named.isSymbolicLink() ||
+      !named.isFile() ||
+      named.dev !== opened.dev ||
+      named.ino !== opened.ino ||
+      named.nlink !== 1n ||
+      !isAllowedDesktopPath(resolved, [resolvedHome])
+    ) {
+      throw new Error("Path escapes the computer workspace");
+    }
+    const fully = await realpath(resolved);
+    if (!isAllowedDesktopPath(fully, [resolvedHome])) {
       throw new Error("Path escapes the computer workspace");
     }
     return;
@@ -557,22 +642,20 @@ async function assertContainedFileHandle(
 
 function childPathViaDirFd(fd: number, name: string) {
   if (process.platform === "linux") return `/proc/self/fd/${fd}/${name}`;
+  return undefined;
+}
+
+async function realpathFromFd(fd: number) {
+  if (process.platform === "linux") return realpath(`/proc/self/fd/${fd}`);
   if (process.platform === "win32") {
     try {
-      // Resolve the held directory inode's current path so mkdir/open do not go
-      // through a junction that replaced the original pathname.
-      return path.join(pathFromDirectoryFd(fd), name);
+      return pathFromDirectoryFd(fd);
     } catch {
       // Hosts that only pretend to be win32 (unit tests) lack the Win32 APIs.
       return undefined;
     }
   }
   return undefined;
-}
-
-async function realpathFromFd(fd: number) {
-  if (process.platform !== "linux") return undefined;
-  return realpath(`/proc/self/fd/${fd}`);
 }
 
 function hasErrorCode(error: unknown, code: string): error is NodeJS.ErrnoException {
