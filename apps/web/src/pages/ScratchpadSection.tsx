@@ -1,5 +1,6 @@
 import type { ScratchpadItem } from "@rakazo/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { BuiButton } from "../components/beautiful-ui/primitives";
 import { rpc } from "../lib/rpc";
 
 export function ScratchpadSection({ botId }: { botId: string }) {
@@ -7,24 +8,29 @@ export function ScratchpadSection({ botId }: { botId: string }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const listGeneration = useRef(0);
 
   async function refresh() {
+    const generation = ++listGeneration.current;
     const list = await rpc.scratchpad.list({ botId });
+    if (generation !== listGeneration.current) return;
     setItems(list);
   }
 
   useEffect(() => {
-    let cancelled = false;
+    const generation = ++listGeneration.current;
     void rpc.scratchpad
       .list({ botId })
       .then((list) => {
-        if (!cancelled) setItems(list);
+        if (generation !== listGeneration.current) return;
+        setItems(list);
       })
       .catch(() => {
-        if (!cancelled) setItems([]);
+        if (generation !== listGeneration.current) return;
+        setItems([]);
       });
     return () => {
-      cancelled = true;
+      listGeneration.current += 1;
     };
   }, [botId]);
 
@@ -154,13 +160,9 @@ export function ScratchpadSection({ botId }: { botId: string }) {
           maxLength={200}
           className="min-w-0 flex-1 rounded-[11px] border border-[#26262A] bg-transparent px-3 py-2 text-[14px] text-[#ECECEE] placeholder:text-[#55555A]"
         />
-        <button
-          type="submit"
-          disabled={busy || !draft.trim()}
-          className="text-[14px] text-[#7A7A80] disabled:opacity-40"
-        >
+        <BuiButton disabled={busy || !draft.trim()} onClick={() => void addItem()}>
           Add
-        </button>
+        </BuiButton>
       </form>
       {error ? <div className="mt-2 px-2.5 text-[13px] text-[#C45C5C]">{error}</div> : null}
     </div>
