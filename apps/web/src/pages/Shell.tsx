@@ -2807,9 +2807,6 @@ function applyThreadEvent(
   if (isComputerStatusEvent(event)) {
     setComputer((prev) => reduceComputerStatus(prev, event));
   }
-  if (isRunTerminalEvent(event)) {
-    setComputer((prev) => (prev?.busyBotName ? { ...prev, busyBotName: null } : prev));
-  }
 }
 
 function ComputerReleaseActions({
