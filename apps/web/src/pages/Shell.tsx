@@ -416,15 +416,10 @@ export function ShellPage() {
     const keepPin = pin?.botId === id;
     const epoch = historyEpoch.current;
     const request = ++threadRefreshEpoch.current;
-    const [snap, routines, skills] = await Promise.all([
-      rpc.threads.get({ botId: id }),
-      rpc.routines.list({ botId: id }),
-      rpc.skills.list({ botId: id }),
-      refreshComputerScreen(id),
-    ]);
+    // Apply threads.get as soon as it returns so stop/takeover status is not held behind
+    // routines/skills/screen fetches (progress can advance the cursor meanwhile).
+    const snap = await rpc.threads.get({ botId: id });
     markOnce("rk:renderer:thread-response");
-    // The epoch check drops a response that raced a conversation clear, which would otherwise
-    // re-apply the deleted messages and cursor over the emptied snapshot.
     if (
       activeBotId.current !== id ||
       epoch !== historyEpoch.current ||
@@ -432,9 +427,6 @@ export function ShellPage() {
     ) {
       return snap;
     }
-    // Reconcile against the latest event-sourced state before setState. A refresh started
-    // after send (especially with the computer panel open) can return after takeover.requested
-    // was applied; overwriting would re-disable Take control with no event left to replay.
     const reconciled = reconcileRefreshedThread(
       snapshotRef.current,
       snap,
@@ -451,16 +443,28 @@ export function ShellPage() {
     }
     commitSnapshot(merged);
     commitComputer(reconciled.computer);
-    setRoutines(routines);
-    setRoutinesBotId(id);
-    setTaughtSkills(skills);
-    setTaughtSkillsBotId(id);
     if (!keepPin && stickToEnd) {
       window.requestAnimationFrame(() => {
         const element = messageScroll.current;
         if (element) element.scrollTop = element.scrollHeight;
       });
     }
+    const [routines, skills] = await Promise.all([
+      rpc.routines.list({ botId: id }),
+      rpc.skills.list({ botId: id }),
+      refreshComputerScreen(id),
+    ]);
+    if (
+      activeBotId.current !== id ||
+      epoch !== historyEpoch.current ||
+      request !== threadRefreshEpoch.current
+    ) {
+      return snap;
+    }
+    setRoutines(routines);
+    setRoutinesBotId(id);
+    setTaughtSkills(skills);
+    setTaughtSkillsBotId(id);
     return snap;
   }
 

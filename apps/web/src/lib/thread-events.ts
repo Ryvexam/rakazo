@@ -57,13 +57,8 @@ export function mergeThreadSnapshot(
 /**
  * Apply a threads.get refresh without clobbering newer event-sourced takeover state.
  *
- * Takeover events are published with the waiting_takeover row, but a refresh that started
- * earlier can still return running+busyBotName. Stop does not emit a terminal event, so a
- * refresh that clears the active run must win even when progress events advanced the local
- * cursor while a slow screen URL fetch kept Promise.all open.
- *
- * Cursor comparisons only apply within the same thread — a new bot/group thread must always
- * replace the previous snapshot (its cursor is not comparable).
+ * A refresh that started earlier can still return running+busyBotName after the client
+ * already applied waiting_takeover. Cursor comparisons only apply within the same thread.
  */
 export function reconcileRefreshedThread(
   prev: ThreadSnapshot | null,
@@ -72,24 +67,9 @@ export function reconcileRefreshedThread(
   preserveLoadedHistory = false,
 ): { snapshot: ThreadSnapshot; computer: ComputerStatus | null } {
   const sameThread = Boolean(prev && prev.threadId === snap.threadId);
-  const snapClearsActiveRun =
-    Boolean(prev?.run && isActive(prev.run.status as RunStatus)) &&
-    (snap.run == null || !isActive(snap.run.status as RunStatus));
 
   if (sameThread && prev && snap.cursor < prev.cursor) {
-    if (!snapClearsActiveRun) {
-      return { snapshot: prev, computer: prevComputer };
-    }
-    // Keep newer event-sourced messages; adopt the cleared run/computer from stop refresh.
-    return {
-      snapshot: {
-        ...prev,
-        run: snap.run,
-        activeRuns: snap.activeRuns,
-        computer: snap.computer ?? prev.computer,
-      },
-      computer: snap.computer ?? null,
-    };
+    return { snapshot: prev, computer: prevComputer };
   }
 
   let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);

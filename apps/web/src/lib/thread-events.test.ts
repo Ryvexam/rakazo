@@ -279,36 +279,6 @@ describe("thread event reduction", () => {
     expect(reconciled.computer).toBe(prevComputer);
   });
 
-  it("applies a stop refresh that clears the run even when progress advanced the cursor", () => {
-    const run = threadRun("run-1");
-    const localWithProgress: ThreadSnapshot = {
-      ...snapshot([]),
-      cursor: 14,
-      run,
-      computer: computer({ state: "running", busyBotName: "Chief" }),
-    };
-    const stopRefresh: ThreadSnapshot = {
-      ...snapshot([]),
-      cursor: 11,
-      run: null,
-      activeRuns: [],
-      computer: computer({ state: "running", busyBotName: null }),
-    };
-
-    const reconciled = reconcileRefreshedThread(
-      localWithProgress,
-      stopRefresh,
-      computer({ state: "running", busyBotName: "Chief" }),
-    );
-
-    expect(reconciled.snapshot.run).toBeNull();
-    expect(reconciled.snapshot.cursor).toBe(14);
-    expect(reconciled.computer?.busyBotName).toBeNull();
-    expect(computerTakeoverBlocked(reconciled.computer, reconciled.snapshot.run?.status)).toBe(
-      false,
-    );
-  });
-
   it("always replaces the snapshot when switching to a different thread", () => {
     const previous: ThreadSnapshot = {
       ...snapshot([]),
@@ -324,7 +294,7 @@ describe("thread event reduction", () => {
       computer: computer({ mode: "dedicated", state: "running" }),
     };
 
-    const reconciled = reconcileRefreshedThread(previous, next, previous.computer);
+    const reconciled = reconcileRefreshedThread(previous, next, previous.computer ?? null);
 
     expect(reconciled.snapshot.threadId).toBe("thread-private");
     expect(reconciled.computer?.mode).toBe("dedicated");
