@@ -33,6 +33,9 @@ describe("desktop release workflow", () => {
     expect(workflow).toContain("DESKTOP_MAC_CSC_LINK");
     expect(workflow).toContain("DESKTOP_WIN_CSC_LINK");
     expect(workflow).not.toMatch(/secrets\.DESKTOP_CSC_(?:LINK|KEY_PASSWORD)/);
+    expect(workflow).not.toContain("cache: pnpm");
+    expect(workflow).toContain("apps/desktop/out/latest*.yml");
+    expect(workflow).not.toContain("apps/desktop/out/*.yml");
   });
 
   it("pins every platform update feed to the official GitHub owner and repo", () => {
