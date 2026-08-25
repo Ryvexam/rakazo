@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { type RakazoDesktop, windowChromeKind } from "./desktop.js";
+import { desktopOAuthCode, type RakazoDesktop, windowChromeKind } from "./desktop.js";
 
 function desktop(platform: string): RakazoDesktop {
   const updateState = {
@@ -27,6 +27,7 @@ function desktop(platform: string): RakazoDesktop {
       download: async () => updateState,
       install: async () => updateState,
     },
+    oauth: { onCallback: () => () => undefined },
   };
 }
 
@@ -50,5 +51,15 @@ describe("window chrome", () => {
     const welcome = readFileSync(path.join(root, "Welcome.tsx"), "utf8");
     expect(shell).not.toContain("FF5F57");
     expect(welcome).not.toContain("FF5F57");
+  });
+});
+
+describe("captured OAuth callbacks", () => {
+  it("sends the code and state as the compact form the paste flow accepts", () => {
+    expect(desktopOAuthCode({ code: "ac_123", state: "verifier_456" })).toBe("ac_123#verifier_456");
+  });
+
+  it("sends a bare code when the provider redirects without state", () => {
+    expect(desktopOAuthCode({ code: "ac_123" })).toBe("ac_123");
   });
 });
