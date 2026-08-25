@@ -344,40 +344,49 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
 
 /**
  * Empty `#root` shells and session-pending skeletons count as loaded HTML but are
- * not a usable app. Wait until the shell is ready (or a non-app auth/welcome route
- * finishes session), or an e2e fixture mounts without app markers.
+ * not a usable app. After session resolves, also wait for a real route surface
+ * (shell / auth / welcome / onboarding) so a bare Suspense fallback cannot pass.
+ * Plain e2e fixtures omit the Rakazo app-state marker.
  */
 async function waitForMountedAppDocument(contents: Electron.WebContents) {
   const deadline = Date.now() + 8_000;
   while (Date.now() < deadline) {
     if (contents.isCrashed()) throw new Error("Renderer stopped after load.");
-    const state = (await contents.executeJavaScript(`({
-      appState: document.querySelector("[data-rakazo-app-state]")?.getAttribute("data-rakazo-app-state") ?? null,
-      path: location.pathname,
-      rootChildren: document.getElementById("root")?.childElementCount ?? 0,
-      mainText: (document.querySelector("main")?.textContent ?? "").trim().length,
-      sessionCommitted: performance.getEntriesByName("rk:renderer:session-committed").length > 0,
-      shellReady: performance.getEntriesByName("rk:renderer:shell-ready").length > 0
-    })`)) as {
-      appState: string | null;
-      path: string;
-      rootChildren: number;
-      mainText: number;
-      sessionCommitted: boolean;
-      shellReady: boolean;
-    };
-    if (state.appState === "session-pending") {
-      await new Promise((r) => setTimeout(r, 50));
-      continue;
-    }
-    // Logged-in `/` redirects into `/app`; require the shell, not just session.
-    const needsShell =
-      state.path === "/" || state.path === "/app" || state.path.startsWith("/app/");
-    if (state.shellReady) return;
-    const sessionReady = state.appState === "ready" || state.sessionCommitted;
-    if (sessionReady && !needsShell) return;
-    // Desktop e2e fixtures mount a plain `<main>` without the web app markers.
-    if (state.appState === null && (state.rootChildren > 0 || state.mainText > 0)) return;
+    const ready = (await contents.executeJavaScript(`(() => {
+      const appState =
+        document.querySelector("[data-rakazo-app-state]")?.getAttribute("data-rakazo-app-state") ??
+        null;
+      if (appState === "session-pending") return false;
+
+      const surfaceReady = Boolean(
+        document.querySelector('[data-testid="shell-root"]') ||
+          document.querySelector(
+            'form input[type="email"], form input[name="email"], form input#email',
+          ) ||
+          Array.from(document.querySelectorAll("button")).some((button) =>
+            /sign\\s*in/i.test((button.textContent || "").trim()),
+          ) ||
+          document.querySelector(
+            '[aria-label="Model"], [aria-label="Model id"], [aria-label="Models from server"]',
+          ),
+      );
+      const sessionReady =
+        appState === "ready" ||
+        performance.getEntriesByName("rk:renderer:session-committed").length > 0;
+      if (sessionReady && surfaceReady) return true;
+
+      // Desktop e2e fixtures mount a plain page without Rakazo app-state markers.
+      if (appState === null) {
+        const bodyText = (document.body?.innerText || "").trim();
+        if (bodyText.includes("Opening your workspace")) return false;
+        if (bodyText === "Loading…" || bodyText === "Loading...") return false;
+        const mainText = (document.querySelector("main")?.textContent || "").trim();
+        const rootChildren = document.getElementById("root")?.childElementCount ?? 0;
+        return mainText.length > 0 || rootChildren > 0;
+      }
+      return false;
+    })()`)) as boolean;
+    if (ready) return;
     await new Promise((r) => setTimeout(r, 50));
   }
   throw new Error("The server page did not become ready.");
@@ -881,19 +890,7 @@ app.whenReady().then(async () => {
         // Commit while the crash listener is still armed, then dispose.
         commitPendingAppSwitch();
         if (rendererWatch?.crashed()) {
-          // Previous window is already gone; roll back disk and drop the dead window
-          // so setup can reconnect to the restored saved instance.
-          await rollbackSetupFile(userDataDir, previousSetup);
-          currentSetup = previousSetup;
-          currentTargetUrl = previousUrl;
-          if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.destroy();
-          mainWindow = null;
-          const message =
-            previousSetup !== null
-              ? "Could not open that server. Renderer stopped. The previous instance was restored for the next launch."
-              : "Could not open that server. Renderer stopped.";
-          // Setup may already be closed (user dismissed it during write); reopen it.
-          showSetupWindow(message);
+          const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
           return { ok: false, error: message };
         }
       } catch {

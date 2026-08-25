@@ -227,9 +227,7 @@ test("a session-pending shell skeleton is not accepted as a ready app", async ()
 });
 
 test("a post-session ready app mount is accepted", async () => {
-  const readyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Rakazo</title>
-<script>performance.mark("rk:renderer:session-committed");performance.mark("rk:renderer:shell-ready");</script>
-</head>
+  const readyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Rakazo</title></head>
 <body><div id="root"><div data-rakazo-app-state="ready"><div data-testid="shell-root" data-ready="false">Workspace</div></div></div></body></html>`;
   const ready = createServer((request, response) => {
     if (request.url === "/rpc/health" && request.method === "POST") {
@@ -263,6 +261,43 @@ test("a post-session ready app mount is accepted", async () => {
   } finally {
     await new Promise<void>((resolve, reject) => {
       ready.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test("a session-ready marker without a route surface is not accepted", async () => {
+  const emptyReadyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Rakazo</title></head>
+<body><div id="root"><div data-rakazo-app-state="ready" class="h-full"></div></div></body></html>`;
+  const emptyReady = createServer((request, response) => {
+    if (request.url === "/rpc/health" && request.method === "POST") {
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ json: { ok: true, version: "0.1.0" } }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    response.end(emptyReadyHtml);
+  });
+  await new Promise<void>((resolve) => emptyReady.listen(0, "127.0.0.1", resolve));
+  const address = emptyReady.address();
+  if (address === null || typeof address === "string")
+    throw new Error("empty-ready server has no port");
+
+  try {
+    app = await launch();
+    const setup = await app.firstWindow();
+    await setup.getByRole("radio", { name: /Existing instance/ }).check();
+    await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
+    await setup.getByRole("button", { name: "Continue" }).click();
+
+    await expect(setup.locator("#status")).toContainText("Could not open that server.", {
+      timeout: 15_000,
+    });
+    await expect(async () => {
+      await expect(readFile(path.join(userData, "setup.json"), "utf8")).rejects.toThrow();
+    }).toPass();
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      emptyReady.close((error) => (error ? reject(error) : resolve()));
     });
   }
 });
