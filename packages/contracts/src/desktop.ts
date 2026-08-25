@@ -31,6 +31,11 @@ export interface RakazoDesktopUpdate {
   install: () => Promise<DesktopUpdateState>;
 }
 
+export interface RakazoDesktopOAuthCallback {
+  code: string;
+  state?: string;
+}
+
 export interface RakazoDesktop {
   platform: string;
   window: {
@@ -40,6 +45,13 @@ export interface RakazoDesktop {
     state: () => Promise<{ minimized: boolean; maximized: boolean; fullScreen: boolean }>;
   };
   update: RakazoDesktopUpdate;
+  oauth: {
+    /**
+     * Authorization codes captured from a sign-in popup's loopback redirect.
+     * Returns an unsubscribe function.
+     */
+    onCallback: (listener: (callback: RakazoDesktopOAuthCallback) => void) => () => void;
+  };
 }
 
 /** How the desktop app was pointed at a Rakazo server during first-run setup. */

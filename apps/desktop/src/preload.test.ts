@@ -4,8 +4,11 @@ import vm from "node:vm";
 import type { RakazoDesktop, RakazoSetup } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 
-function runPreload(file: string) {
-  const invoke = vi.fn(async (channel: string) => ({ channel }));
+function runPreload(file: string, ipc: { invoke?: unknown; on?: unknown; off?: unknown } = {}) {
+  const invoke =
+    (ipc.invoke as ReturnType<typeof vi.fn>) ?? vi.fn(async (channel: string) => ({ channel }));
+  const on = (ipc.on as ReturnType<typeof vi.fn>) ?? vi.fn();
+  const off = (ipc.off as ReturnType<typeof vi.fn>) ?? vi.fn();
   const exposeInMainWorld = vi.fn();
   const source = readFileSync(path.join(import.meta.dirname, file), "utf8");
 
@@ -13,21 +16,22 @@ function runPreload(file: string) {
     process: { platform: "linux" },
     require(moduleName: string) {
       if (moduleName !== "electron") throw new Error(`Unexpected preload import: ${moduleName}`);
-      return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke } };
+      return { contextBridge: { exposeInMainWorld }, ipcRenderer: { invoke, on, off } };
     },
   });
 
-  return { invoke, exposeInMainWorld };
+  return { invoke, on, off, exposeInMainWorld };
 }
 
 describe("desktop preload bridge", () => {
-  it("exposes only the platform, the four window operations, and the updater", async () => {
+  it("exposes only the platform, the four window operations, the updater, and the OAuth bridge", async () => {
     const { invoke, exposeInMainWorld } = runPreload("preload.cjs");
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoDesktop];
     expect(globalName).toBe("rakazoDesktop");
     expect(bridge.platform).toBe("linux");
+    expect(Object.keys(bridge).sort()).toEqual(["oauth", "platform", "update", "window"]);
     expect(Object.keys(bridge.window).sort()).toEqual([
       "close",
       "minimize",
@@ -59,7 +63,27 @@ describe("desktop preload bridge", () => {
   it("keeps setup off the app bridge so a connected server cannot re-point the app", () => {
     const { exposeInMainWorld } = runPreload("preload.cjs");
     const [, bridge] = exposeInMainWorld.mock.calls[0] as [string, Record<string, unknown>];
-    expect(Object.keys(bridge).sort()).toEqual(["platform", "update", "window"]);
+    expect(Object.keys(bridge).sort()).toEqual(["oauth", "platform", "update", "window"]);
+  });
+
+  it("forwards captured codes without leaking the IPC event to the renderer", () => {
+    const listeners: Array<(event: unknown, callback: unknown) => void> = [];
+    const on = vi.fn((_channel: string, handler: (event: unknown, callback: unknown) => void) => {
+      listeners.push(handler);
+    });
+    const off = vi.fn();
+    const { exposeInMainWorld } = runPreload("preload.cjs", { on, off });
+
+    const [, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoDesktop];
+    const received: unknown[] = [];
+    const unsubscribe = bridge.oauth.onCallback((callback) => received.push(callback));
+
+    expect(on).toHaveBeenCalledWith("desktop.oauth.callback", expect.any(Function));
+    listeners[0]?.({ sender: "ipc-event" }, { code: "ac_123", state: "verifier_456" });
+    expect(received).toEqual([{ code: "ac_123", state: "verifier_456" }]);
+
+    unsubscribe();
+    expect(off).toHaveBeenCalledWith("desktop.oauth.callback", expect.any(Function));
   });
 });
 
