@@ -651,6 +651,16 @@ function destroySetupWindow() {
   if (setup !== null && !setup.isDestroyed()) setup.destroy();
 }
 
+/** Best-effort restore of setup.json after a failed save that already wrote disk. */
+async function rollbackSetupFile(userDataDir: string, previousSetup: DesktopSetup | null) {
+  try {
+    if (previousSetup !== null) await writeSetup(userDataDir, previousSetup);
+    else await clearSetup(userDataDir);
+  } catch {
+    // Disk rollback is best-effort; callers already restored in-memory state when possible.
+  }
+}
+
 function safeOrigin(targetUrl: string) {
   try {
     return new URL(targetUrl).origin;
@@ -761,12 +771,7 @@ app.whenReady().then(async () => {
         await writeSetup(userDataDir, setup);
         if (rendererWatch?.crashed()) {
           abandonPendingAppSwitch(previousSetup, previousUrl);
-          try {
-            if (previousSetup !== null) await writeSetup(userDataDir, previousSetup);
-            else await clearSetup(userDataDir);
-          } catch {
-            // Best-effort disk rollback; in-memory session already restored.
-          }
+          await rollbackSetupFile(userDataDir, previousSetup);
           return {
             ok: false,
             error: "Could not open that server. Renderer stopped.",
@@ -774,6 +779,14 @@ app.whenReady().then(async () => {
         }
         // Commit while the crash listener is still armed, then dispose.
         commitPendingAppSwitch();
+        if (rendererWatch?.crashed()) {
+          // Previous window is already gone; still roll back disk for next launch.
+          await rollbackSetupFile(userDataDir, previousSetup);
+          return {
+            ok: false,
+            error: "Could not open that server. Renderer stopped.",
+          };
+        }
       } catch {
         const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
         return {
