@@ -672,7 +672,15 @@ export function ShellPage() {
               if (event.payload.role === "bot") markBotReadIfVisible(active.id);
             }
             if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
-              void refreshThread(active.id).catch(() => undefined);
+              // Lease release happens in the executor finally after the terminal event.
+              // Refresh once, then again shortly if status still shows a busy bot.
+              void (async () => {
+                const snap = await refreshThread(active.id).catch(() => null);
+                if (!snap?.computer?.busyBotName) return;
+                await abortableDelay(300);
+                if (activeBotId.current !== active.id) return;
+                await refreshThread(active.id).catch(() => undefined);
+              })();
             } else if (event.type === "computer.takeover.requested") {
               // Clears busyBotName so Take control stays enabled for waiting_takeover.
               void refreshThread(active.id).catch(() => undefined);
