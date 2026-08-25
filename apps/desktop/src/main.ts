@@ -198,6 +198,8 @@ function createWindow(url: string, partition: string | null) {
   // OAuth flows open the provider's authorize page via window.open; give that
   // popup a normal framed window. Non-http(s) targets stay closed; other http(s)
   // origins open in the system browser so a connected server cannot navigate us away.
+  // Hoisted for loopback OAuth capture so MCP/in-app localhost callbacks are skipped.
+  const appOrigin = targetOrigin ?? safeOrigin(url);
   win.webContents.setWindowOpenHandler(({ url: childUrl }) => {
     let target: URL;
     try {
@@ -205,7 +207,6 @@ function createWindow(url: string, partition: string | null) {
     } catch {
       return { action: "deny" };
     }
-    const appOrigin = targetOrigin ?? safeOrigin(url);
     const sameOrigin = appOrigin !== null && target.origin === appOrigin;
     // Same-origin http(s) and third-party https (OAuth) get a framed popup.
     if (
@@ -229,15 +230,23 @@ function createWindow(url: string, partition: string | null) {
   // the user on a blank window holding the authorization code in a URL they
   // cannot read. Capture it here and hand it to the app instead.
   win.webContents.on("did-create-window", (popup) => {
-    const capture = (details: Electron.Event, url: string) => {
-      const callback = oauthCallbackFrom(url);
+    const capture = (details: {
+      preventDefault: () => void;
+      url: string;
+      isMainFrame?: boolean;
+    }) => {
+      // will-redirect can fire for iframes; only the top-level callback counts.
+      if (details.isMainFrame === false) return;
+      const callback = oauthCallbackFrom(details.url, {
+        excludeOrigins: appOrigin !== null ? [appOrigin] : [],
+      });
       if (!callback) return;
       details.preventDefault();
       if (!win.isDestroyed()) win.webContents.send("desktop.oauth.callback", callback);
       if (!popup.isDestroyed()) popup.close();
     };
-    popup.webContents.on("will-redirect", (details) => capture(details, details.url));
-    popup.webContents.on("will-navigate", (details) => capture(details, details.url));
+    popup.webContents.on("will-redirect", (details) => capture(details));
+    popup.webContents.on("will-navigate", (details) => capture(details));
   });
   win.on("close", (event) => {
     if (
