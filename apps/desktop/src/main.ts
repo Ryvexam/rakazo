@@ -4,6 +4,11 @@ import path from "node:path";
 import type { DesktopReachability, DesktopSetup } from "@rakazo/contracts";
 import { app, BrowserWindow, ipcMain, Menu, net, type Session, session, shell } from "electron";
 import {
+  DesktopUpdateController,
+  type ElectronAutoUpdater,
+  LAUNCH_CHECK_DELAY_MS,
+} from "./auto-update.js";
+import {
   bundledRendererCandidates,
   contentType,
   forwardedRendererRequestInit,
@@ -41,6 +46,17 @@ let quitting = false;
 let warmWindowTimer: NodeJS.Timeout | undefined;
 const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.RAKAZO_WARM_WINDOW_TTL_MS);
 
+const updaterEnvironment = {
+  packaged: app.isPackaged,
+  version: app.getVersion(),
+  disabled: process.env.RAKAZO_DISABLE_AUTO_UPDATE === "1",
+};
+const desktopUpdater = new DesktopUpdateController(updaterEnvironment, async () => {
+  const module = await import("electron-updater");
+  return (module.default ?? module).autoUpdater as unknown as ElectronAutoUpdater;
+});
+let launchUpdateCheckScheduled = false;
+
 markOnce("rk:main:module-evaluated");
 if (PERFORMANCE_USER_DATA) {
   app.setPath("userData", PERFORMANCE_USER_DATA);
@@ -55,6 +71,10 @@ function markOnce(name: string) {
 
 function windowFrom(event: Electron.IpcMainInvokeEvent) {
   return BrowserWindow.fromWebContents(event.sender);
+}
+
+function fromMainWindow(event: Electron.IpcMainInvokeEvent) {
+  return mainWindow !== null && windowFrom(event) === mainWindow;
 }
 
 function developmentIcon() {
@@ -237,6 +257,10 @@ function createWindow(url: string, partition: string | null) {
       throw error;
     },
   );
+  if (!launchUpdateCheckScheduled) {
+    launchUpdateCheckScheduled = true;
+    setTimeout(() => void desktopUpdater.check(false), LAUNCH_CHECK_DELAY_MS).unref();
+  }
   return { loaded, win };
 }
 
@@ -835,6 +859,24 @@ app.whenReady().then(async () => {
       maximized: win?.isMaximized() ?? false,
       fullScreen: win?.isFullScreen() ?? false,
     };
+  });
+  ipcMain.handle("desktop.update.state", () => desktopUpdater.state());
+  ipcMain.handle("desktop.update.check", (event) =>
+    fromMainWindow(event) ? desktopUpdater.check(true) : desktopUpdater.state(),
+  );
+  ipcMain.handle("desktop.update.download", (event) =>
+    fromMainWindow(event) ? desktopUpdater.download() : desktopUpdater.state(),
+  );
+  ipcMain.handle("desktop.update.install", async (event) => {
+    if (!fromMainWindow(event) || desktopUpdater.state().phase !== "ready") {
+      return desktopUpdater.state();
+    }
+    quitting = true;
+    const state = await desktopUpdater.install();
+    // Install failures leave ready via installFailed; also clear quitting if still ready
+    // is no longer true for any other reason.
+    if (state.phase !== "ready") quitting = false;
+    return state;
   });
   ipcMain.handle("desktop.setup.state", (event) => {
     if (!fromSetupWindow(event)) return null;
