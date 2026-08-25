@@ -893,12 +893,19 @@ app.whenReady().then(async () => {
           const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
           return { ok: false, error: message };
         }
-        // Commit while the crash listener is still armed, then dispose.
+        // Commit while the crash listener is still armed.
         commitPendingAppSwitch();
         if (rendererWatch?.crashed()) {
           const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
           return { ok: false, error: message };
         }
+        destroySetupWindow();
+        // Final check after setup closes — a crash in this gap still rolls back.
+        if (rendererWatch?.crashed()) {
+          const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
+          return { ok: false, error: message };
+        }
+        return { ok: true };
       } catch {
         const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
         return {
@@ -911,8 +918,6 @@ app.whenReady().then(async () => {
       } finally {
         rendererWatch?.dispose();
       }
-      destroySetupWindow();
-      return { ok: true };
     } finally {
       setupSaveInProgress = false;
     }
