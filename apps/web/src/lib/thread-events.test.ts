@@ -208,6 +208,24 @@ describe("thread event reduction", () => {
     ).toBe(true);
     expect(isThreadSnapshotEvent(event({ type: "run.started" }))).toBe(true);
     expect(isThreadSnapshotEvent(event({ type: "run.completed" }))).toBe(true);
+    expect(isThreadSnapshotEvent(event({ type: "computer.takeover.requested" }))).toBe(true);
+  });
+
+  it("marks the run as waiting when computer takeover is requested", () => {
+    const run = threadRun("run-1");
+    const initial: ThreadSnapshot = {
+      ...snapshot([]),
+      run,
+      activeRuns: [run],
+    };
+
+    const waiting = reduceThreadSnapshot(
+      initial,
+      event({ type: "computer.takeover.requested", seq: 5, runId: run.id }),
+    );
+
+    expect(waiting?.run?.status).toBe("waiting_takeover");
+    expect(waiting?.activeRuns?.[0]?.status).toBe("waiting_takeover");
   });
 
   it("keeps group member status in sync with run lifecycle events", () => {

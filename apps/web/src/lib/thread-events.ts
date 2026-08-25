@@ -71,6 +71,7 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "thread.message.updated" ||
     event.type === "run.started" ||
     event.type === "run.waiting_input" ||
+    event.type === "computer.takeover.requested" ||
     isRunTerminalEvent(event)
   );
 }
@@ -97,23 +98,24 @@ export function reduceThreadSnapshot(
       members: updateMemberStatus(prev.members, event.botId, "running"),
     };
   }
-  if (event.type === "run.waiting_input") {
+  if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
+    const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";
     const runChanged = Boolean(
-      prev.run && prev.run.id === event.runId && prev.run.status !== "waiting_input",
+      prev.run && prev.run.id === event.runId && prev.run.status !== status,
     );
     const activeRunChanged = prev.activeRuns?.some(
-      (candidate) => candidate.id === event.runId && candidate.status !== "waiting_input",
+      (candidate) => candidate.id === event.runId && candidate.status !== status,
     );
-    const members = updateMemberStatus(prev.members, event.botId, "waiting_input");
+    const members = updateMemberStatus(prev.members, event.botId, status);
     if (!runChanged && !activeRunChanged && members === prev.members) return prev;
     return {
       ...prev,
       cursor: event.seq,
       members,
-      run: runChanged && prev.run ? { ...prev.run, status: "waiting_input" } : prev.run,
+      run: runChanged && prev.run ? { ...prev.run, status } : prev.run,
       activeRuns: activeRunChanged
         ? prev.activeRuns?.map((candidate) =>
-            candidate.id === event.runId ? { ...candidate, status: "waiting_input" } : candidate,
+            candidate.id === event.runId ? { ...candidate, status } : candidate,
           )
         : prev.activeRuns,
     };

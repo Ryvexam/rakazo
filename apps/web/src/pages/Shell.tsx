@@ -673,9 +673,6 @@ export function ShellPage() {
             }
             if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
               void refreshThread(active.id).catch(() => undefined);
-            } else if (event.type === "computer.takeover.requested") {
-              // Clears busyBotName so Take control stays enabled for waiting_takeover.
-              void refreshThread(active.id).catch(() => undefined);
             } else if (isComputerStatusEvent(event)) {
               void refreshComputerScreen(active.id).catch(() => undefined);
             }
