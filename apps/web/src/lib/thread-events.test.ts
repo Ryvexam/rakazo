@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeThreadRuns,
   computerPanelAutoBoot,
+  computerTakeoverBlocked,
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
   prependThreadMessagePage,
@@ -832,6 +833,34 @@ describe("computer event reduction", () => {
     });
     expect(userHoldsComputerControl(granted, "bot-1")).toBe(true);
     expect(userHoldsComputerControl(granted, "bot-2")).toBe(false);
+  });
+
+  it("treats a busy bot name as a blocked takeover", () => {
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "running")).toBe(true);
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }))).toBe(false);
+    expect(computerTakeoverBlocked(computer({ busyBotName: null }), "running")).toBe(false);
+    expect(computerTakeoverBlocked(null, "running")).toBe(false);
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "waiting_takeover")).toBe(
+      false,
+    );
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "completed")).toBe(false);
+  });
+
+  it("clears the busy bot when takeover is requested or granted", () => {
+    const busy = computer({ state: "running", busyBotName: "Writer" });
+    expect(
+      reduceComputerStatus(busy, event({ type: "computer.takeover.requested", payload: {} })),
+    ).toMatchObject({ busyBotName: null });
+    expect(
+      reduceComputerStatus(
+        busy,
+        event({ type: "computer.takeover.granted", payload: { takeoverRequested: true } }),
+      ),
+    ).toMatchObject({
+      controlHolder: "user",
+      busyBotName: null,
+      takeoverRequested: true,
+    });
   });
 
   it("auto-boots stopped computers and recovers a running screen that has no URL", () => {

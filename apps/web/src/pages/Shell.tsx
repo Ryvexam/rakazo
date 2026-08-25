@@ -100,6 +100,7 @@ import { rpc } from "../lib/rpc";
 import {
   activeThreadRuns,
   computerPanelAutoBoot,
+  computerTakeoverBlocked,
   isComputerStatusEvent,
   isThreadSnapshotEvent,
   mergeThreadSnapshot,
@@ -231,6 +232,7 @@ export function ShellPage() {
   const [routineError, setRoutineError] = useState<string | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const [computerOpen, setComputerOpen] = useState(false);
+  const [computerError, setComputerError] = useState<string | null>(null);
   const [usage, setUsage] = useState<{
     inputTokens: number;
     outputTokens: number;
@@ -670,6 +672,9 @@ export function ShellPage() {
               if (event.payload.role === "bot") markBotReadIfVisible(active.id);
             }
             if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
+              void refreshThread(active.id).catch(() => undefined);
+            } else if (event.type === "computer.takeover.requested") {
+              // Clears busyBotName so Take control stays enabled for waiting_takeover.
               void refreshThread(active.id).catch(() => undefined);
             } else if (isComputerStatusEvent(event)) {
               void refreshComputerScreen(active.id).catch(() => undefined);
@@ -1173,6 +1178,10 @@ export function ShellPage() {
       if (needsBoot) await rpc.computer.boot({ botId: active.id });
       if (takeControl) await rpc.computer.takeover({ botId: active.id });
       await refreshThread(active.id);
+      setComputerError(null);
+    } catch (error) {
+      setComputerError(error instanceof Error ? error.message : "Could not take control");
+      throw error;
     } finally {
       setBooting(false);
     }
@@ -1205,7 +1214,7 @@ export function ShellPage() {
         takeControl: false,
         overlay: action === "boot",
         force: true,
-      });
+      }).catch(() => undefined);
     })();
     return () => {
       cancelled = true;
@@ -1214,7 +1223,12 @@ export function ShellPage() {
 
   useEffect(() => {
     setComputerOpen(false);
+    setComputerError(null);
   }, [active?.id]);
+
+  useEffect(() => {
+    if (!computer?.busyBotName) setComputerError(null);
+  }, [computer?.busyBotName]);
 
   useEffect(() => {
     if (panel !== "routine") {
@@ -1264,12 +1278,17 @@ export function ShellPage() {
   async function openComputer() {
     if (!active) return;
     const needsTakeover = !userHoldsComputerControl(computer, active.id);
-    await bootComputer({
-      takeControl: needsTakeover,
-      overlay: needsTakeover || computer?.state !== "running",
-      force: computer?.state !== "running",
-    });
-    setComputerOpen(true);
+    const blocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
+    try {
+      await bootComputer({
+        takeControl: needsTakeover && !blocked,
+        overlay: (needsTakeover && !blocked) || computer?.state !== "running",
+        force: computer?.state !== "running",
+      });
+      setComputerOpen(true);
+    } catch {
+      // computerError already set in bootComputer
+    }
   }
 
   async function releaseComputer(reason?: ComputerReleaseReason) {
@@ -1281,6 +1300,7 @@ export function ShellPage() {
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl);
   const hasControl = userHoldsComputerControl(computer, active?.id);
+  const takeoverBlocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
 
   const userName = session.data?.user.name ?? "You";
   const initials = userName
@@ -1826,15 +1846,17 @@ export function ShellPage() {
                     onClick={() => void openComputer()}
                   />
                 </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-[13.5px] text-[#85858A]">
-                    {computer?.busyBotName
-                      ? `${computer.busyBotName} is using it`
-                      : hasControl
-                        ? "You have control"
-                        : computer?.state === "suspended"
-                          ? "Asleep"
-                          : computerLabel(computer?.mode, active.name)}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="min-w-0 text-[13.5px] text-[#85858A]">
+                    {hasControl
+                      ? "You have control"
+                      : computerError
+                        ? computerError
+                        : computer?.busyBotName
+                          ? `${computer.busyBotName} is using it`
+                          : computer?.state === "suspended"
+                            ? "Asleep"
+                            : computerLabel(computer?.mode, active.name)}
                   </span>
                   {hasControl ? (
                     <ComputerReleaseActions
@@ -1846,6 +1868,8 @@ export function ShellPage() {
                       type="button"
                       variant="outline"
                       size="sm"
+                      disabled={takeoverBlocked}
+                      title={takeoverBlocked ? "Stop the bot first" : undefined}
                       onClick={() => void openComputer()}
                     >
                       Take control
@@ -2360,7 +2384,11 @@ export function ShellPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => void bootComputer({ takeControl: true, overlay: false })}
+                  disabled={takeoverBlocked}
+                  title={takeoverBlocked ? "Stop the bot first" : undefined}
+                  onClick={() =>
+                    void bootComputer({ takeControl: true, overlay: false }).catch(() => undefined)
+                  }
                 >
                   Take control
                 </Button>
