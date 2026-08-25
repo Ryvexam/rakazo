@@ -344,9 +344,10 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
 
 /**
  * Empty `#root` shells and session-pending skeletons count as loaded HTML but are
- * not a usable app. After session resolves, also wait for a real route surface
- * (shell / auth / welcome / onboarding) so a bare Suspense fallback cannot pass.
- * Plain e2e fixtures omit the Rakazo app-state marker.
+ * not a usable app. After session resolves, wait for a bootstrapped shell
+ * (`data-ready` / shell-ready mark) or an auth/welcome/onboarding surface so a
+ * bare Suspense fallback or pre-bootstrap ShellPage cannot pass. Plain e2e
+ * fixtures omit the Rakazo app-state marker.
  */
 async function waitForMountedAppDocument(contents: Electron.WebContents) {
   const deadline = Date.now() + 8_000;
@@ -358,11 +359,15 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
         null;
       if (appState === "session-pending") return false;
 
-      const surfaceReady = Boolean(
-        document.querySelector('[data-testid="shell-root"]') ||
-          document.querySelector(
-            'form input[type="email"], form input[name="email"], form input#email',
-          ) ||
+      const shell = document.querySelector('[data-testid="shell-root"]');
+      const shellBootstrapped = Boolean(
+        (shell && shell.getAttribute("data-ready") === "true") ||
+          performance.getEntriesByName("rk:renderer:shell-ready").length > 0,
+      );
+      const authOrWelcomeSurface = Boolean(
+        document.querySelector(
+          'form input[type="email"], form input[name="email"], form input#email',
+        ) ||
           Array.from(document.querySelectorAll("button")).some((button) =>
             /sign\\s*in/i.test((button.textContent || "").trim()),
           ) ||
@@ -370,6 +375,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
             '[aria-label="Model"], [aria-label="Model id"], [aria-label="Models from server"]',
           ),
       );
+      const surfaceReady = shellBootstrapped || authOrWelcomeSurface;
       const sessionReady =
         appState === "ready" ||
         performance.getEntriesByName("rk:renderer:session-committed").length > 0;
