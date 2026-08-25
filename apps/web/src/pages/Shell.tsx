@@ -671,14 +671,10 @@ export function ShellPage() {
               }
               if (event.payload.role === "bot") markBotReadIfVisible(active.id);
             }
-            if (
-              isRunTerminalEvent(event) ||
-              event.type === "run.waiting_takeover" ||
-              event.type === "skill.teaching.stopped"
-            ) {
-              // waiting_takeover clears busyBotName (same rule as computer.takeover 409).
+            if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
               void refreshThread(active.id).catch(() => undefined);
             } else if (event.type === "computer.takeover.requested") {
+              // Clears busyBotName so Take control stays enabled for waiting_takeover.
               void refreshThread(active.id).catch(() => undefined);
             } else if (isComputerStatusEvent(event)) {
               void refreshComputerScreen(active.id).catch(() => undefined);
