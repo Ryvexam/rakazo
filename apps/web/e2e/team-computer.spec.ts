@@ -186,7 +186,9 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
     .toBeNull();
   await expect(takeControl).toBeEnabled();
   await takeControl.click();
-  await expect(page.getByText("You have control", { exact: true })).toBeVisible();
+  await expect(
+    page.getByTestId("side-panel").getByText("You have control", { exact: true }),
+  ).toBeVisible();
   await captureScreenshot(page, testInfo, "49-team-computer-takeover-after-stop");
   await rpc(page, "computer/release", { botId: chiefId });
 });

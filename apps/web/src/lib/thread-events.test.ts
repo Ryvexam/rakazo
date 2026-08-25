@@ -279,6 +279,25 @@ describe("thread event reduction", () => {
     expect(reconciled.computer).toBe(prevComputer);
   });
 
+  it("refreshes busy status when only transient thread events are ahead", () => {
+    const run = threadRun("run-1");
+    const newer: ThreadSnapshot = { ...snapshot([]), cursor: 12, run };
+    const older: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 9,
+      run,
+      computer: computer({ state: "running", controlHolder: "bot", busyBotName: "Chief" }),
+    };
+
+    const reconciled = reconcileRefreshedThread(
+      newer,
+      older,
+      computer({ state: "running", controlHolder: "bot", busyBotName: null }),
+    );
+
+    expect(reconciled.snapshot).toBe(newer);
+    expect(reconciled.computer?.busyBotName).toBe("Chief");
+  });
   it("always replaces the snapshot when switching to a different thread", () => {
     const previous: ThreadSnapshot = {
       ...snapshot([]),

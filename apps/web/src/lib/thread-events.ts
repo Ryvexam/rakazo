@@ -69,7 +69,12 @@ export function reconcileRefreshedThread(
   const sameThread = Boolean(prev && prev.threadId === snap.threadId);
 
   if (sameThread && prev && snap.cursor < prev.cursor) {
-    return { snapshot: prev, computer: prevComputer };
+    // Progress can advance the thread cursor while the embedded computer status remains
+    // authoritative. Preserve only the event-sourced takeover transition itself.
+    return {
+      snapshot: prev,
+      computer: prev.run?.status === "waiting_takeover" ? prevComputer : (snap.computer ?? null),
+    };
   }
 
   let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);
