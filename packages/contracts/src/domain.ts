@@ -160,6 +160,27 @@ export const CreateRoutineInput = z.object({
   active: z.boolean().default(false),
 });
 
+export const ScratchpadItemStatusSchema = z.enum(["open", "parked", "done"]);
+export type ScratchpadItemStatus = z.infer<typeof ScratchpadItemStatusSchema>;
+
+export const ScratchpadItemSchema = z.object({
+  id: Id,
+  botId: Id,
+  title: z.string(),
+  status: ScratchpadItemStatusSchema,
+  notes: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ScratchpadItem = z.infer<typeof ScratchpadItemSchema>;
+
+export const CreateScratchpadItemInput = z.object({
+  botId: Id,
+  title: z.string().min(1).max(200),
+  status: ScratchpadItemStatusSchema.default("open"),
+  notes: z.string().max(4_000).default(""),
+});
+
 export const TaughtSkillStatusSchema = z.enum(["recording", "drafting", "draft", "saved"]);
 export type TaughtSkillStatus = z.infer<typeof TaughtSkillStatusSchema>;
 

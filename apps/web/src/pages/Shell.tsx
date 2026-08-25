@@ -146,6 +146,9 @@ const VoiceSettingsOverlay = lazy(() =>
   import("./VoiceSettingsOverlay").then((module) => ({ default: module.VoiceSettingsOverlay })),
 );
 const CallView = lazy(() => import("./CallView").then((module) => ({ default: module.CallView })));
+const ScratchpadSection = lazy(() =>
+  import("./ScratchpadSection").then((module) => ({ default: module.ScratchpadSection })),
+);
 
 type Panel =
   | "computer"
@@ -3604,6 +3607,9 @@ function BotSettings({
         </label>
       ) : null}
       {error ? <p className="mt-2 text-[13px] text-[#E65707]">{error}</p> : null}
+      <Suspense fallback={null}>
+        <ScratchpadSection botId={bot.id} />
+      </Suspense>
       <div className="mt-5 flex flex-col items-start gap-3">
         <button
           type="button"
