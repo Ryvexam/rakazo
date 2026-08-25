@@ -1,10 +1,10 @@
 import {
   close as closeCb,
+  closeSync,
   fchmod as fchmodCb,
   fstat as fstatCb,
   ftruncate as ftruncateCb,
   writeFile as writeFileCb,
-  closeSync,
 } from "node:fs";
 import { promisify } from "node:util";
 import koffi from "koffi";

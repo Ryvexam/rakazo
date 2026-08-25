@@ -42,8 +42,8 @@ import {
   openChildDirectoryViaDirectoryFdWin32,
   openExistingChildViaDirectoryFdWin32,
   pathFromDirectoryFd,
-  win32NtRelativeAvailable,
   type Win32FileHandle,
+  win32NtRelativeAvailable,
 } from "./desktop-sandbox-win32-path.js";
 
 const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
