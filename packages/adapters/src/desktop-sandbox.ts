@@ -312,10 +312,11 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
         current = await assertContainedDirectoryHandle(parentHandle, current, resolvedHome);
         const viaDirFd = childPathViaDirFd(parentHandle.fd, segment);
         const next = viaDirFd ?? path.join(current, segment);
-        let created = false;
+        let created: { path: string; dev: number; ino: number } | undefined;
         try {
           await mkdir(next);
-          created = true;
+          const createdStat = await stat(next);
+          created = { path: next, dev: createdStat.dev, ino: createdStat.ino };
         } catch (error) {
           if (!hasErrorCode(error, "EEXIST")) throw error;
         }
@@ -345,7 +346,14 @@ async function localWorkspaceTarget(home: string, relative: string, mustExist: b
           await parentHandle.close().catch(() => undefined);
           parentHandle = nextHandle;
         } catch (error) {
-          if (created) await rmdir(next).catch(() => undefined);
+          // Only remove the directory inode we created; a swapped pathname must not
+          // rmdir a different empty directory.
+          if (created) {
+            const present = await stat(created.path).catch(() => undefined);
+            if (present && present.dev === created.dev && present.ino === created.ino) {
+              await rmdir(created.path).catch(() => undefined);
+            }
+          }
           throw error;
         }
       }
