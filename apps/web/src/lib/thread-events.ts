@@ -1,11 +1,13 @@
 import type {
   ComputerStatus,
   ProductEvent,
+  RunStatus,
   ThreadMessage,
   ThreadMessagePage,
   ThreadSnapshot,
 } from "@rakazo/contracts";
 import {
+  isActive,
   isRunTerminalEvent,
   mergeThreadHistory,
   prependThreadHistoryPage,
@@ -235,13 +237,16 @@ export function userHoldsComputerControl(
   return Boolean(botId && computer?.controlHolder === "user" && computer.controlBotId === botId);
 }
 
-/** True when status says a bot run/lease blocks Take control (API would return 409). */
+/** True when a live bot run is blocking Take control (API would return 409). */
 export function computerTakeoverBlocked(
   computer: Pick<ComputerStatus, "busyBotName"> | null | undefined,
   runStatus?: string | null,
 ): boolean {
-  if (runStatus === "waiting_takeover") return false;
-  return Boolean(computer?.busyBotName);
+  if (!computer?.busyBotName) return false;
+  // waiting_takeover is the bot asking for control; terminal/idle clears the block even if
+  // busyBotName is briefly stale while the executor still holds the lease in finally.
+  if (!runStatus || runStatus === "waiting_takeover") return false;
+  return isActive(runStatus as RunStatus);
 }
 
 export function computerPanelAutoBoot(

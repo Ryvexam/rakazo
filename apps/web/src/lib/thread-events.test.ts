@@ -836,12 +836,14 @@ describe("computer event reduction", () => {
   });
 
   it("treats a busy bot name as a blocked takeover", () => {
-    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }))).toBe(true);
-    expect(computerTakeoverBlocked(computer({ busyBotName: null }))).toBe(false);
-    expect(computerTakeoverBlocked(null)).toBe(false);
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "running")).toBe(true);
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }))).toBe(false);
+    expect(computerTakeoverBlocked(computer({ busyBotName: null }), "running")).toBe(false);
+    expect(computerTakeoverBlocked(null, "running")).toBe(false);
     expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "waiting_takeover")).toBe(
       false,
     );
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "completed")).toBe(false);
   });
 
   it("clears the busy bot when takeover is requested or granted", () => {
