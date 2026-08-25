@@ -26,47 +26,57 @@ export function App() {
     return window.location.pathname.startsWith("/app") ? (
       <ShellSkeleton />
     ) : (
-      <div className="grid h-full place-items-center text-[#6C6C70]">Loading…</div>
+      <div
+        className="grid h-full place-items-center text-[#6C6C70]"
+        data-rakazo-app-state="session-pending"
+      >
+        Loading…
+      </div>
     );
   }
   const user = session.data?.user;
   return (
-    <Suspense fallback={<div className="h-full bg-[#050506]" />}>
-      <Routes>
-        <Route path="/" element={user ? <Navigate to="/app" replace /> : <WelcomePage />} />
-        <Route
-          path="/sign-in"
-          element={user ? <Navigate to="/app" replace /> : <AuthPage mode="in" />}
-        />
-        <Route
-          path="/sign-up"
-          element={user ? <Navigate to="/onboarding" replace /> : <AuthPage mode="up" />}
-        />
-        <Route
-          path="/onboarding"
-          element={user ? <OnboardingPage /> : <Navigate to="/sign-in" replace />}
-        />
-        <Route
-          path="/mcp/oauth/callback"
-          element={user ? <McpOAuthCallbackPage /> : <Navigate to="/sign-in" replace />}
-        />
-        <Route path="/app" element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />} />
-        <Route
-          path="/app/g/:groupId"
-          element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
-        />
-        <Route
-          path="/app/:botId"
-          element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
-        />
-      </Routes>
-    </Suspense>
+    <div className="h-full" data-rakazo-app-state="ready">
+      <Suspense fallback={<div className="h-full bg-[#050506]" />}>
+        <Routes>
+          <Route path="/" element={user ? <Navigate to="/app" replace /> : <WelcomePage />} />
+          <Route
+            path="/sign-in"
+            element={user ? <Navigate to="/app" replace /> : <AuthPage mode="in" />}
+          />
+          <Route
+            path="/sign-up"
+            element={user ? <Navigate to="/onboarding" replace /> : <AuthPage mode="up" />}
+          />
+          <Route
+            path="/onboarding"
+            element={user ? <OnboardingPage /> : <Navigate to="/sign-in" replace />}
+          />
+          <Route
+            path="/mcp/oauth/callback"
+            element={user ? <McpOAuthCallbackPage /> : <Navigate to="/sign-in" replace />}
+          />
+          <Route path="/app" element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />} />
+          <Route
+            path="/app/g/:groupId"
+            element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
+          />
+          <Route
+            path="/app/:botId"
+            element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}
+          />
+        </Routes>
+      </Suspense>
+    </div>
   );
 }
 
 function ShellSkeleton() {
   return (
-    <div className="flex h-full overflow-hidden bg-[#050506]">
+    <div
+      className="flex h-full overflow-hidden bg-[#050506]"
+      data-rakazo-app-state="session-pending"
+    >
       <aside className="hidden w-[316px] shrink-0 border-e border-[#171719] bg-[#0B0B0C] px-3.5 pt-16 md:block">
         <div className="h-10 rounded-xl bg-[#141416]" />
         <div className="mt-5 space-y-2 px-1">

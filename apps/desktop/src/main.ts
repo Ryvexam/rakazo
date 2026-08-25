@@ -343,18 +343,32 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
 }
 
 /**
- * Empty `#root` shells count as loaded HTML but are not a usable app. Wait until
- * React (or an e2e `<main>` fixture) mounts visible content.
+ * Empty `#root` shells and session-pending skeletons count as loaded HTML but are
+ * not a usable app. Wait until auth session resolves (or an e2e `<main>` fixture
+ * mounts without the pending marker).
  */
 async function waitForMountedAppDocument(contents: Electron.WebContents) {
   const deadline = Date.now() + 8_000;
   while (Date.now() < deadline) {
     if (contents.isCrashed()) throw new Error("Renderer stopped after load.");
     const state = (await contents.executeJavaScript(`({
+      appState: document.querySelector("[data-rakazo-app-state]")?.getAttribute("data-rakazo-app-state") ?? null,
       rootChildren: document.getElementById("root")?.childElementCount ?? 0,
-      mainText: (document.querySelector("main")?.textContent ?? "").trim().length
-    })`)) as { rootChildren: number; mainText: number };
-    if (state.rootChildren > 0 || state.mainText > 0) return;
+      mainText: (document.querySelector("main")?.textContent ?? "").trim().length,
+      sessionCommitted: performance.getEntriesByName("rk:renderer:session-committed").length > 0
+    })`)) as {
+      appState: string | null;
+      rootChildren: number;
+      mainText: number;
+      sessionCommitted: boolean;
+    };
+    if (state.appState === "session-pending") {
+      await new Promise((r) => setTimeout(r, 50));
+      continue;
+    }
+    if (state.appState === "ready" || state.sessionCommitted) return;
+    // Desktop e2e fixtures mount a plain `<main>` without the web app markers.
+    if (state.appState === null && (state.rootChildren > 0 || state.mainText > 0)) return;
     await new Promise((r) => setTimeout(r, 50));
   }
   throw new Error("The server page did not become ready.");
