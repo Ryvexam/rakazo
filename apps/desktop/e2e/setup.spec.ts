@@ -203,7 +203,8 @@ test("a session-pending shell skeleton is not accepted as a ready app", async ()
   });
   await new Promise<void>((resolve) => skeleton.listen(0, "127.0.0.1", resolve));
   const address = skeleton.address();
-  if (address === null || typeof address === "string") throw new Error("skeleton server has no port");
+  if (address === null || typeof address === "string")
+    throw new Error("skeleton server has no port");
 
   try {
     app = await launch();
