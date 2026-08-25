@@ -154,6 +154,8 @@ function createWindow(url: string, partition: string | null) {
 }
 
 async function probeDocument(url: string): Promise<string | null> {
+  // Test/dev harnesses may load data: or file: documents; only probe real servers.
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
   try {
     const response = await net.fetch(url, {
       method: "GET",
