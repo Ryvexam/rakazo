@@ -64,8 +64,8 @@ import {
 import {
   type Dispatch,
   lazy,
-  memo,
   type MutableRefObject,
+  memo,
   type RefObject,
   type SetStateAction,
   Suspense,
