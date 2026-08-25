@@ -309,6 +309,27 @@ describe("thread event reduction", () => {
     );
   });
 
+  it("always replaces the snapshot when switching to a different thread", () => {
+    const previous: ThreadSnapshot = {
+      ...snapshot([]),
+      threadId: "thread-writer",
+      cursor: 40,
+      computer: computer({ mode: "team", busyBotName: null }),
+    };
+    const next: ThreadSnapshot = {
+      ...snapshot([]),
+      botId: "bot-private",
+      threadId: "thread-private",
+      cursor: 0,
+      computer: computer({ mode: "dedicated", state: "running" }),
+    };
+
+    const reconciled = reconcileRefreshedThread(previous, next, previous.computer);
+
+    expect(reconciled.snapshot.threadId).toBe("thread-private");
+    expect(reconciled.computer?.mode).toBe("dedicated");
+  });
+
   it("keeps group member status in sync with run lifecycle events", () => {
     const run = threadRun("run-1", "bot-member");
     const initial: ThreadSnapshot = {
