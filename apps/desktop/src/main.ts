@@ -570,13 +570,30 @@ function abandonPendingAppSwitch(
     const failed = mainWindow;
     if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
     mainWindow = previous;
-    // Keep the prior window hidden so setup stays focused with the save error;
-    // closing setup restores it via restoreAppWindowAfterSetup.
     currentSetup = previousSetup;
     currentTargetUrl = previousUrl;
+    // If setup was already closed (e.g. during a slow write), make the restored
+    // session visible — otherwise macOS can be left with no shown window.
+    if (setupWindow === null || setupWindow.isDestroyed()) {
+      previous.show();
+      previous.focus();
+    }
     return "restored";
   }
   return "kept";
+}
+
+/** Watch for a renderer crash until setup is persisted (or the switch is abandoned). */
+function watchRendererUntilCommitted(win: BrowserWindow): () => boolean {
+  let crashed = false;
+  const onGone = () => {
+    crashed = true;
+  };
+  win.webContents.once("render-process-gone", onGone);
+  return () => {
+    if (!win.isDestroyed()) win.webContents.removeListener("render-process-gone", onGone);
+    return crashed;
+  };
 }
 
 function destroySetupWindow() {
@@ -722,9 +739,22 @@ app.whenReady().then(async () => {
         };
       }
 
+      const appWindow = mainWindow;
+      const finishRendererWatch =
+        appWindow !== null && !appWindow.isDestroyed()
+          ? watchRendererUntilCommitted(appWindow)
+          : () => false;
       try {
         await writeSetup(userDataDir, setup);
+        if (finishRendererWatch()) {
+          abandonPendingAppSwitch(previousSetup, previousUrl);
+          return {
+            ok: false,
+            error: "Could not open that server. Renderer stopped.",
+          };
+        }
       } catch {
+        finishRendererWatch();
         const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
         return {
           ok: false,
@@ -734,6 +764,7 @@ app.whenReady().then(async () => {
               : "Connected, but could not save setup for the next launch. Try Continue again.",
         };
       }
+      finishRendererWatch();
       commitPendingAppSwitch();
       destroySetupWindow();
       return { ok: true };
