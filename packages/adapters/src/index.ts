@@ -50,6 +50,8 @@ export * from "./remote-mcp.js";
 export * from "./sandbox-factory.js";
 export * from "./scripted-runtime.js";
 export * from "./scripted-voice.js";
+export * from "./scratchpad-context.js";
+export * from "./scratchpad-tools.js";
 export * from "./secrets.js";
 export { SupermemoryMemoryProvider } from "./supermemory-memory-provider.js";
 export * from "./teaching-session.js";
