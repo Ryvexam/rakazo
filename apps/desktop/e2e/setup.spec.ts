@@ -227,7 +227,9 @@ test("a session-pending shell skeleton is not accepted as a ready app", async ()
 });
 
 test("a post-session ready app mount is accepted", async () => {
-  const readyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Rakazo</title></head>
+  const readyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Rakazo</title>
+<script>performance.mark("rk:renderer:session-committed");performance.mark("rk:renderer:shell-ready");</script>
+</head>
 <body><div id="root"><div data-rakazo-app-state="ready"><div data-testid="shell-root" data-ready="false">Workspace</div></div></div></body></html>`;
   const ready = createServer((request, response) => {
     if (request.url === "/rpc/health" && request.method === "POST") {

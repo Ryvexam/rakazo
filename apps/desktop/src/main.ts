@@ -344,8 +344,8 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
 
 /**
  * Empty `#root` shells and session-pending skeletons count as loaded HTML but are
- * not a usable app. Wait until auth session resolves (or an e2e `<main>` fixture
- * mounts without the pending marker).
+ * not a usable app. Wait until the shell is ready (or a non-app auth/welcome route
+ * finishes session), or an e2e fixture mounts without app markers.
  */
 async function waitForMountedAppDocument(contents: Electron.WebContents) {
   const deadline = Date.now() + 8_000;
@@ -353,20 +353,29 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
     if (contents.isCrashed()) throw new Error("Renderer stopped after load.");
     const state = (await contents.executeJavaScript(`({
       appState: document.querySelector("[data-rakazo-app-state]")?.getAttribute("data-rakazo-app-state") ?? null,
+      path: location.pathname,
       rootChildren: document.getElementById("root")?.childElementCount ?? 0,
       mainText: (document.querySelector("main")?.textContent ?? "").trim().length,
-      sessionCommitted: performance.getEntriesByName("rk:renderer:session-committed").length > 0
+      sessionCommitted: performance.getEntriesByName("rk:renderer:session-committed").length > 0,
+      shellReady: performance.getEntriesByName("rk:renderer:shell-ready").length > 0
     })`)) as {
       appState: string | null;
+      path: string;
       rootChildren: number;
       mainText: number;
       sessionCommitted: boolean;
+      shellReady: boolean;
     };
     if (state.appState === "session-pending") {
       await new Promise((r) => setTimeout(r, 50));
       continue;
     }
-    if (state.appState === "ready" || state.sessionCommitted) return;
+    // Logged-in `/` redirects into `/app`; require the shell, not just session.
+    const needsShell =
+      state.path === "/" || state.path === "/app" || state.path.startsWith("/app/");
+    if (state.shellReady) return;
+    const sessionReady = state.appState === "ready" || state.sessionCommitted;
+    if (sessionReady && !needsShell) return;
     // Desktop e2e fixtures mount a plain `<main>` without the web app markers.
     if (state.appState === null && (state.rootChildren > 0 || state.mainText > 0)) return;
     await new Promise((r) => setTimeout(r, 50));
@@ -732,6 +741,31 @@ async function rollbackSetupFile(userDataDir: string, previousSetup: DesktopSetu
   }
 }
 
+/**
+ * After a renderer crash around save: restore prior setup when possible, otherwise
+ * drop the crashed first-run window so setup remains the only recovery surface.
+ */
+async function recoverFromCrashedSave(
+  userDataDir: string,
+  previousSetup: DesktopSetup | null,
+  previousUrl: string | null,
+): Promise<string> {
+  const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
+  await rollbackSetupFile(userDataDir, previousSetup);
+  if (outcome === "kept") {
+    if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.destroy();
+    mainWindow = null;
+    currentSetup = previousSetup;
+    currentTargetUrl = previousUrl;
+  }
+  const message =
+    previousSetup !== null
+      ? "Could not open that server. Renderer stopped. The previous instance was restored for the next launch."
+      : "Could not open that server. Renderer stopped.";
+  showSetupWindow(message);
+  return message;
+}
+
 function safeOrigin(targetUrl: string) {
   try {
     return new URL(targetUrl).origin;
@@ -841,12 +875,8 @@ app.whenReady().then(async () => {
       try {
         await writeSetup(userDataDir, setup);
         if (rendererWatch?.crashed()) {
-          abandonPendingAppSwitch(previousSetup, previousUrl);
-          await rollbackSetupFile(userDataDir, previousSetup);
-          return {
-            ok: false,
-            error: "Could not open that server. Renderer stopped.",
-          };
+          const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
+          return { ok: false, error: message };
         }
         // Commit while the crash listener is still armed, then dispose.
         commitPendingAppSwitch();
