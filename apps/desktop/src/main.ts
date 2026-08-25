@@ -525,8 +525,8 @@ function abandonPendingAppSwitch(
     const failed = mainWindow;
     if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
     mainWindow = previous;
-    previous.show();
-    previous.focus();
+    // Keep the prior window hidden so setup stays focused with the save error;
+    // closing setup restores it via restoreAppWindowAfterSetup.
     currentSetup = previousSetup;
     currentTargetUrl = previousUrl;
     return "restored";
