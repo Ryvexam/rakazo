@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { BuiButton, LoadingState } from "./components/beautiful-ui/primitives";
 import { authClient } from "./lib/auth";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import {
@@ -109,21 +110,20 @@ function SessionUnavailable({ refetch }: { refetch: () => Promise<void> }) {
 
   return (
     <div className="grid h-full place-items-center bg-[#050506] px-6 text-center">
-      <div>
-        <div className="text-[15px] text-[#ECECEE]">Reconnecting…</div>
-        <p className="mt-2 text-[13.5px] text-[#6C6C70]">Can&apos;t reach the server.</p>
-        <button
-          type="button"
-          aria-label="Retry now"
-          onClick={() => {
-            retryImmediately.current = true;
-            setAttempt(0);
-            setRetryKey((key) => key + 1);
-          }}
-          className="mt-4 rounded-[11px] border border-[#26262A] px-4 py-2 text-[13px] text-[#ECECEE]"
-        >
-          Retry now
-        </button>
+      <div className="flex flex-col items-center">
+        <LoadingState label="Reconnecting" />
+        <p className="mt-3 text-[13.5px] text-[#6C6C70]">Can&apos;t reach the server.</p>
+        <div className="mt-4">
+          <BuiButton
+            onClick={() => {
+              retryImmediately.current = true;
+              setAttempt(0);
+              setRetryKey((key) => key + 1);
+            }}
+          >
+            Retry now
+          </BuiButton>
+        </div>
       </div>
     </div>
   );
