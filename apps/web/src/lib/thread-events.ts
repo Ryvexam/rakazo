@@ -34,9 +34,10 @@ function runFromStartedEvent(event: ProductEvent, previous: Run | undefined): Ru
     threadId: event.threadId,
     taskId: previous?.taskId ?? event.runId ?? event.id,
     status: "running",
-    trigger: typeof trigger === "string" && runTriggers.has(trigger as Run["trigger"])
-      ? (trigger as Run["trigger"])
-      : (previous?.trigger ?? "user"),
+    trigger:
+      typeof trigger === "string" && runTriggers.has(trigger as Run["trigger"])
+        ? (trigger as Run["trigger"])
+        : (previous?.trigger ?? "user"),
     modelProvider: previous?.modelProvider ?? null,
     modelId: previous?.modelId ?? null,
     error: null,
