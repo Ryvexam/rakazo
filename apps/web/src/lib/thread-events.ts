@@ -238,7 +238,9 @@ export function userHoldsComputerControl(
 /** True when status says a bot run/lease blocks Take control (API would return 409). */
 export function computerTakeoverBlocked(
   computer: Pick<ComputerStatus, "busyBotName"> | null | undefined,
+  runStatus?: string | null,
 ): boolean {
+  if (runStatus === "waiting_takeover") return false;
   return Boolean(computer?.busyBotName);
 }
 
@@ -257,20 +259,39 @@ export function reduceComputerStatus(
 ): ComputerStatus | null {
   if (!prev) return prev;
   if (!isComputerStatusEvent(event)) return prev;
+  if (event.type === "computer.takeover.requested") {
+    return prev.busyBotName === null ? prev : { ...prev, busyBotName: null };
+  }
   if (event.type === "computer.takeover.granted") {
     const takeoverRequested = event.payload.takeoverRequested === true;
     return prev.controlHolder === "user" &&
       prev.controlBotId === event.botId &&
-      prev.takeoverRequested === takeoverRequested
+      prev.takeoverRequested === takeoverRequested &&
+      prev.busyBotName === null
       ? prev
-      : { ...prev, controlHolder: "user", controlBotId: event.botId, takeoverRequested };
+      : {
+          ...prev,
+          controlHolder: "user",
+          controlBotId: event.botId,
+          takeoverRequested,
+          busyBotName: null,
+        };
   }
   if (event.type === "computer.takeover.released") {
     const holder = event.payload.holder;
     if (holder !== "bot" && holder !== "none") return prev;
-    return prev.controlHolder === holder && prev.controlBotId === null && !prev.takeoverRequested
+    return prev.controlHolder === holder &&
+      prev.controlBotId === null &&
+      !prev.takeoverRequested &&
+      prev.busyBotName === null
       ? prev
-      : { ...prev, controlHolder: holder, controlBotId: null, takeoverRequested: false };
+      : {
+          ...prev,
+          controlHolder: holder,
+          controlBotId: null,
+          takeoverRequested: false,
+          busyBotName: null,
+        };
   }
   const status = event.payload.status;
   if (!isComputerState(status)) return prev;
@@ -286,6 +307,7 @@ export function reduceComputerStatus(
 export function isComputerStatusEvent(event: ProductEvent): boolean {
   return (
     event.type === "computer.status" ||
+    event.type === "computer.takeover.requested" ||
     event.type === "computer.takeover.granted" ||
     event.type === "computer.takeover.released"
   );

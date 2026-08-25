@@ -673,6 +673,8 @@ export function ShellPage() {
             }
             if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
               void refreshThread(active.id).catch(() => undefined);
+            } else if (event.type === "computer.takeover.requested") {
+              void refreshThread(active.id).catch(() => undefined);
             } else if (isComputerStatusEvent(event)) {
               void refreshComputerScreen(active.id).catch(() => undefined);
             }
@@ -1257,7 +1259,7 @@ export function ShellPage() {
   async function openComputer() {
     if (!active) return;
     const needsTakeover = !userHoldsComputerControl(computer, active.id);
-    const blocked = computerTakeoverBlocked(computer);
+    const blocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
     try {
       await bootComputer({
         takeControl: needsTakeover && !blocked,
@@ -1282,7 +1284,7 @@ export function ShellPage() {
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl);
   const hasControl = userHoldsComputerControl(computer, active?.id);
-  const takeoverBlocked = computerTakeoverBlocked(computer);
+  const takeoverBlocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
 
   const userName = session.data?.user.name ?? "You";
   const initials = userName
@@ -1830,12 +1832,12 @@ export function ShellPage() {
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className="min-w-0 text-[13.5px] text-[#85858A]">
-                    {computerError
-                      ? computerError
-                      : computer?.busyBotName
-                        ? `${computer.busyBotName} is using it`
-                        : hasControl
-                          ? "You have control"
+                    {hasControl
+                      ? "You have control"
+                      : computerError
+                        ? computerError
+                        : computer?.busyBotName
+                          ? `${computer.busyBotName} is using it`
                           : computer?.state === "suspended"
                             ? "Asleep"
                             : computerLabel(computer?.mode, active.name)}

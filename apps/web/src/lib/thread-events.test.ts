@@ -839,6 +839,26 @@ describe("computer event reduction", () => {
     expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }))).toBe(true);
     expect(computerTakeoverBlocked(computer({ busyBotName: null }))).toBe(false);
     expect(computerTakeoverBlocked(null)).toBe(false);
+    expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "waiting_takeover")).toBe(
+      false,
+    );
+  });
+
+  it("clears the busy bot when takeover is requested or granted", () => {
+    const busy = computer({ state: "running", busyBotName: "Writer" });
+    expect(
+      reduceComputerStatus(busy, event({ type: "computer.takeover.requested", payload: {} })),
+    ).toMatchObject({ busyBotName: null });
+    expect(
+      reduceComputerStatus(
+        busy,
+        event({ type: "computer.takeover.granted", payload: { takeoverRequested: true } }),
+      ),
+    ).toMatchObject({
+      controlHolder: "user",
+      busyBotName: null,
+      takeoverRequested: true,
+    });
   });
 
   it("auto-boots stopped computers and recovers a running screen that has no URL", () => {
