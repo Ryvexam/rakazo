@@ -7,6 +7,7 @@ import type {
 import { describe, expect, it } from "vitest";
 import {
   activeThreadRuns,
+  clearActiveThreadRuns,
   computerPanelAutoBoot,
   computerTakeoverBlocked,
   isThreadSnapshotEvent,
@@ -330,6 +331,48 @@ describe("thread event reduction", () => {
 
     expect(reconciled.snapshot).toBe(newer);
     expect(reconciled.computer?.busyBotName).toBe("Chief");
+  });
+
+  it("hydrates a live run from a refresh without rolling back newer progress", () => {
+    const run = threadRun("run-1");
+    const liveProgress = {
+      ...message("progress:run-1", [{ kind: "progress" as const, text: "Still working" }]),
+      runId: run.id,
+    };
+    const newer: ThreadSnapshot = { ...snapshot([liveProgress]), cursor: 12, run: null };
+    const older: ThreadSnapshot = {
+      ...snapshot([]),
+      cursor: 11,
+      run,
+      computer: computer({ state: "running", controlHolder: "bot", busyBotName: "Chief" }),
+    };
+
+    const reconciled = reconcileRefreshedThread(newer, older, computer());
+
+    expect(reconciled.snapshot.cursor).toBe(12);
+    expect(reconciled.snapshot.messages).toEqual([liveProgress]);
+    expect(reconciled.snapshot.run).toBe(run);
+    expect(reconciled.computer?.busyBotName).toBe("Chief");
+  });
+
+  it("clears active runs and their transient progress after stop", () => {
+    const run = threadRun("run-1");
+    const durable = message("message-1", [{ kind: "text", text: "Keep me" }]);
+    const progress = {
+      ...message("progress:run-1", [{ kind: "progress" as const, text: "Still working" }]),
+      runId: run.id,
+    };
+    const stopped = clearActiveThreadRuns({
+      ...snapshot([durable, progress]),
+      run,
+      activeRuns: [run],
+      computer: computer({ state: "running", busyBotName: "Chief" }),
+    });
+
+    expect(stopped.run).toBeNull();
+    expect(stopped.activeRuns).toEqual([]);
+    expect(stopped.messages).toEqual([durable]);
+    expect(stopped.computer?.busyBotName).toBeNull();
   });
 
   it("keeps an optimistic stop clear when an older cursor refresh still looks busy", () => {

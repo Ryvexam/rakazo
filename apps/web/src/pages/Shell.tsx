@@ -98,6 +98,7 @@ import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc } from "../lib/rpc";
 import {
   activeThreadRuns,
+  clearActiveThreadRuns,
   computerPanelAutoBoot,
   computerTakeoverBlocked,
   isComputerStatusEvent,
@@ -1110,7 +1111,7 @@ export function ShellPage() {
       // Stop has no terminal event; clear run UI before refresh races with in-flight gets.
       if (activeGroupId.current === groupTarget) {
         updateSnapshot((prev) =>
-          prev && prev.groupId === groupTarget ? { ...prev, run: null, activeRuns: [] } : prev,
+          prev && prev.groupId === groupTarget ? clearActiveThreadRuns(prev) : prev,
         );
       }
       await refreshGroupThreadRef.current(groupTarget).catch(() => undefined);
@@ -1132,10 +1133,7 @@ export function ShellPage() {
     if (activeBotId.current === botTarget) {
       updateSnapshot((prev) => {
         if (!prev || (prev.botId !== botTarget && prev.botId)) return prev;
-        const computer = prev.computer?.busyBotName
-          ? { ...prev.computer, busyBotName: null }
-          : prev.computer;
-        return { ...prev, run: null, activeRuns: [], computer };
+        return clearActiveThreadRuns(prev);
       });
       const currentComputer = computerRef.current;
       if (currentComputer?.busyBotName) {

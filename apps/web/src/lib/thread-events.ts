@@ -76,6 +76,23 @@ export function activeThreadRuns(
   return snapshot?.activeRuns ?? (snapshot?.run ? [snapshot.run] : []);
 }
 
+export function clearActiveThreadRuns(snapshot: ThreadSnapshot): ThreadSnapshot {
+  const runIds = new Set(activeThreadRuns(snapshot).map((run) => run.id));
+  const computer = snapshot.computer?.busyBotName
+    ? { ...snapshot.computer, busyBotName: null }
+    : snapshot.computer;
+  return {
+    ...snapshot,
+    run: null,
+    activeRuns: [],
+    messages: snapshot.messages.filter(
+      (message) =>
+        !message.runId || !runIds.has(message.runId) || !message.id.startsWith("progress:"),
+    ),
+    computer,
+  };
+}
+
 export function mergeThreadSnapshot(
   prev: ThreadSnapshot | null,
   next: ThreadSnapshot,
@@ -101,6 +118,28 @@ export function reconcileRefreshedThread(
   const sameThread = Boolean(prev && prev.threadId === snap.threadId);
 
   if (sameThread && prev && snap.cursor < prev.cursor) {
+    // A subscription can advance the cursor with progress before the send-triggered refresh
+    // returns the new run record. Hydrate that matching run without rolling the transcript back.
+    // Optimistic stop removes the matching progress message, so an older refresh cannot revive it.
+    const refreshedRun = snap.run;
+    const hasMatchingLiveProgress = Boolean(
+      refreshedRun &&
+        prev.messages.some(
+          (message) =>
+            message.runId === refreshedRun.id && message.id === `progress:${refreshedRun.id}`,
+        ),
+    );
+    if (!prev.run && refreshedRun && hasMatchingLiveProgress) {
+      return {
+        snapshot: {
+          ...prev,
+          run: refreshedRun,
+          activeRuns: snap.activeRuns,
+          computer: snap.computer,
+        },
+        computer: snap.computer ?? null,
+      };
+    }
     // Progress can advance the thread cursor while embedded computer status from threads.get
     // is still useful — but only while a live run remains. Preserve event-sourced
     // waiting_takeover clears and optimistic stop clears.
