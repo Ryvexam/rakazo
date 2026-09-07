@@ -20,6 +20,11 @@ import {
 
 const API = "https://api.fish.audio";
 const MODEL_PAGE_SIZE = 100;
+/** Top-scored public voices for the picker — not a full catalog crawl. */
+const PUBLIC_MODEL_PAGES = 5;
+/** User-owned libraries are smaller; still hard-capped. */
+const OWN_MODEL_PAGES = 20;
+const LIST_VOICES_DEADLINE_MS = 20_000;
 const TTS_MODEL = "s2.1-pro";
 
 export class FishAudioVoiceProvider implements VoiceProvider {
@@ -58,14 +63,16 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     }
   }
 
-  /** Return public and user-owned Fish Audio voice models as Rakazo voice choices. */
+  /** Return user-owned then bounded public Fish Audio voices as Rakazo choices. */
   async listVoices(apiKey: string, context: AdapterContext): Promise<VoiceInfo[]> {
+    const signal = voiceDeadline(context.signal, LIST_VOICES_DEADLINE_MS);
+    const listContext = { ...context, signal };
     const [publicModels, ownModels] = await Promise.all([
-      fetchModels(apiKey, context, false),
-      fetchModels(apiKey, context, true),
+      fetchModels(apiKey, listContext, false),
+      fetchModels(apiKey, listContext, true),
     ]);
     const seen = new Set<string>();
-    return [...publicModels, ...ownModels].map(modelToVoice).filter((voice): voice is VoiceInfo => {
+    return [...ownModels, ...publicModels].map(modelToVoice).filter((voice): voice is VoiceInfo => {
       if (!voice || seen.has(voice.id)) return false;
       seen.add(voice.id);
       return true;
@@ -121,14 +128,15 @@ export class FishAudioVoiceProvider implements VoiceProvider {
   }
 }
 
-/** Fetch public or user-owned Fish Audio voice models across available pages. */
+/** Fetch public or user-owned Fish Audio voice models within a page budget. */
 async function fetchModels(
   apiKey: string,
   context: AdapterContext,
   own: boolean,
 ): Promise<Array<Record<string, unknown>>> {
+  const maxPages = own ? OWN_MODEL_PAGES : PUBLIC_MODEL_PAGES;
   const models: Array<Record<string, unknown>> = [];
-  for (let pageNumber = 1; ; pageNumber++) {
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
     const params = new URLSearchParams({
       page_size: String(MODEL_PAGE_SIZE),
       page_number: String(pageNumber),
@@ -137,7 +145,7 @@ async function fetchModels(
     if (own) params.set("self", "true");
     const res = await fetch(`${API}/model?${params}`, {
       headers: fishAudioHeaders(apiKey),
-      signal: voiceDeadline(context.signal, 20_000),
+      signal: context.signal,
     });
     const body = await readVoiceJson(res, { requireValid: res.ok });
     if (!res.ok) throw new Error(voiceHttpError(res.status, "Fish Audio", "listing voices", body));
