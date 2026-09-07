@@ -1,6 +1,7 @@
 import type { VoiceProvider } from "@rakazo/adapter-kit";
 import { CartesiaVoiceProvider } from "./cartesia-voice.js";
 import { ElevenLabsVoiceProvider } from "./elevenlabs-voice.js";
+import { FishAudioVoiceProvider } from "./fish-audio-voice.js";
 import { OpenAIVoiceProvider } from "./openai-voice.js";
 import { SCRIPTED_VOICE_CATALOG_ENTRY, ScriptedVoiceProvider } from "./scripted-voice.js";
 
@@ -22,6 +23,12 @@ export const VOICE_CATALOG = [
     name: "Cartesia",
     description: "Lowest-latency Sonic voices for interruptible calls.",
     transcribe: false,
+  },
+  {
+    id: "fish-audio",
+    name: "Fish Audio",
+    description: "Voice models, cloning, and expressive speech with optional transcription.",
+    transcribe: true,
   },
 ] as const;
 
@@ -58,13 +65,17 @@ export function createVoiceProvider(kind: string): VoiceProvider {
       return new OpenAIVoiceProvider();
     case "cartesia":
       return new CartesiaVoiceProvider();
+    case "fish-audio":
+      return new FishAudioVoiceProvider();
     case "scripted":
       if (!scriptedVoiceEnabled()) break;
       return new ScriptedVoiceProvider();
     default:
       break;
   }
-  throw new Error(`Unknown voice provider "${kind}". Use elevenlabs | openai | cartesia.`);
+  throw new Error(
+    `Unknown voice provider "${kind}". Use elevenlabs | openai | cartesia | fish-audio.`,
+  );
 }
 
 export class NoVoiceConfigured extends Error {

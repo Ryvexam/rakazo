@@ -48,6 +48,7 @@ export * from "./expo-push.js";
 export * from "./fake-browser.js";
 export * from "./fake-sandbox.js";
 export * from "./fake-web.js";
+export * from "./fish-audio-voice.js";
 export * from "./github-webhook-emulator.js";
 export * from "./graphql-connectors.js";
 export * from "./group-handoff.js";

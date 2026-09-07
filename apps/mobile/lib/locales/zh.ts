@@ -385,8 +385,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Speak message": "朗读消息",
   Speak: "朗读",
   "Speak only": "仅朗读",
-  "Speak replies aloud with ElevenLabs, OpenAI, or Cartesia":
-    "使用 ElevenLabs、OpenAI 或 Cartesia 朗读回复",
+  "Speak replies aloud with ElevenLabs, OpenAI, Cartesia, or Fish Audio":
+    "使用 ElevenLabs、OpenAI、Cartesia 或 Fish Audio 朗读回复",
   Starting: "正在启动",
   "Starting…": "正在启动…",
   Stop: "停止",
@@ -446,8 +446,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Booting {label}": "正在启动 {label}",
   bot: "Bot",
   "{from} messaged {to}": "{from} 已向 {to} 发消息",
-  "Bring your own key. ElevenLabs, OpenAI, and Cartesia all plug into the same speak buttons.":
-    "自带密钥。ElevenLabs、OpenAI 和 Cartesia 都接入同一套朗读按钮。",
+  "Bring your own key. ElevenLabs, OpenAI, Cartesia, and Fish Audio all plug into the same speak buttons.":
+    "自带密钥。ElevenLabs、OpenAI、Cartesia 和 Fish Audio 都接入同一套朗读按钮。",
   "Configure a plugin catalog on the server to connect apps.":
     "在服务器上配置插件目录即可连接应用。",
   "Connected {name}.": "已连接 {name}。",
