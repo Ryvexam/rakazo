@@ -58,14 +58,30 @@ export function HostComputerPrompt({ initialMe }: { initialMe?: Me }) {
           <DialogTitle className="text-[22px]">
             <Trans>Where should bots run?</Trans>
           </DialogTitle>
-          <DialogDescription className="leading-relaxed">
-            <Trans>Docker gives bots a separate workspace.</Trans>
+          <DialogDescription className="space-y-2 leading-relaxed">
+            <span className="block">
+              <Trans>
+                Docker limits access to your computer for added security. Using {hostLabel} lets
+                bots work with your local files and tools.
+              </Trans>
+            </span>
+            <span className="block text-xs text-muted-foreground/80">
+              <Trans>
+                Local access lets bots run commands without asking. Avoid it on shared or public
+                servers.
+              </Trans>
+            </span>
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div className="flex flex-col gap-2">
-          <Button size="lg" disabled={pending} onClick={() => void choose("docker")}>
-            <Trans>Docker (recommended)</Trans>
+          <Button
+            variant="outline"
+            size="lg"
+            disabled={pending}
+            onClick={() => void choose("docker")}
+          >
+            <Trans>Docker</Trans>
           </Button>
           <Button
             variant="outline"
@@ -76,12 +92,6 @@ export function HostComputerPrompt({ initialMe }: { initialMe?: Me }) {
             <Trans>Use {hostLabel}</Trans>
           </Button>
         </div>
-        <p className="text-xs leading-relaxed text-muted-foreground/80">
-          <Trans>
-            On {hostLabel}, bots can access your files and run commands without asking. Avoid this
-            on shared or public servers.
-          </Trans>
-        </p>
       </DialogContent>
     </Dialog>
   );
