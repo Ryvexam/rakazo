@@ -36,6 +36,7 @@ export const ProductEventType = z.enum([
   "skill.saved",
   "effect.recorded",
   "agent.tool.called",
+  "agent.tool.completed",
   "effect.reconciled",
   "usage.recorded",
   "bot.spawned",

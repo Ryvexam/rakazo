@@ -868,6 +868,9 @@ export function applyMobileThreadEvent(
       messages: [...remaining, streaming],
     };
   }
+  if (event.type === "agent.tool.completed") {
+    return { ...prev, cursor: event.seq ?? prev.cursor };
+  }
   if (event.type === "thread.subagent") {
     const agentId = String(event.payload?.agentId ?? event.id ?? "live");
     const status = event.payload?.status;

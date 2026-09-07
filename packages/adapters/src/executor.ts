@@ -5,6 +5,7 @@ import type {
   AgentModelOAuthCredential,
   AgentRunRequest,
   AgentRuntime,
+  AgentToolCompletion,
   ArtifactStore,
   BrowserProvider,
   ComputerRef,
@@ -480,6 +481,102 @@ export interface ExecutorDeps {
   cloudAgent?: CloudAgentConnection | null;
   /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
   shutdownSignal?: AbortSignal;
+}
+
+function isAuditableToolResult(value: unknown): value is {
+  kind: "agent_tool_result";
+  content: unknown[];
+  details: unknown;
+} {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    (value as { kind?: unknown }).kind === "agent_tool_result" &&
+    Array.isArray((value as { content?: unknown }).content)
+  );
+}
+
+function isFailedToolResult(value: unknown): value is { error: unknown } {
+  if (!value || typeof value !== "object" || !("error" in value)) return false;
+  const error = (value as { error?: unknown }).error;
+  return error !== undefined && error !== null;
+}
+
+export function toolCompletionFromResult(
+  base: Pick<AgentToolCompletion, "name" | "executionId" | "durationMs">,
+  result: unknown,
+): AgentToolCompletion {
+  const paused = isToolPauseResult(result);
+  if (isFailedToolResult(result)) return { ...base, error: result.error, paused };
+  return { ...base, result, paused };
+}
+
+export function toolCompletionAuditPayload(
+  completion: AgentToolCompletion,
+  secrets: string[] = [],
+): Record<string, unknown> {
+  const durationMs = Number.isFinite(completion.durationMs)
+    ? Math.max(0, Math.round(completion.durationMs))
+    : 0;
+  const payload: Record<string, unknown> = {
+    name: redactSecrets(completion.name, secrets),
+    executionId: redactSecrets(completion.executionId, secrets),
+    durationMs,
+    outcome: completion.paused ? "paused" : completion.error === undefined ? "succeeded" : "error",
+  };
+  if (completion.error !== undefined) {
+    payload.error = sanitizeConnectorError(completion.error, secrets);
+  }
+  if (!isAuditableToolResult(completion.result)) return payload;
+
+  payload.contentTypes = completion.result.content.flatMap((part) => {
+    if (!part || typeof part !== "object") return [];
+    const type = (part as { type?: unknown }).type;
+    return type === "text" || type === "image" ? [type] : [];
+  });
+  const details = completion.result.details;
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return payload;
+  }
+  const record = details as Record<string, unknown>;
+  if (typeof record.frameId === "string") {
+    payload.frameId = redactSecrets(record.frameId, secrets);
+  }
+  if (typeof record.capturedAt === "string") {
+    payload.capturedAt = record.capturedAt;
+  }
+  if (typeof record.width === "number" && Number.isFinite(record.width)) {
+    payload.width = record.width;
+  }
+  if (typeof record.height === "number" && Number.isFinite(record.height)) {
+    payload.height = record.height;
+  }
+  return payload;
+}
+
+export async function appendToolCompletionAudit(
+  deps: { events: Pick<ThreadEvents, "append"> },
+  target: { spaceId: string; threadId: string; botId: string; runId: string },
+  completion: AgentToolCompletion,
+  secrets: string[] = [],
+): Promise<void> {
+  try {
+    await deps.events.append({
+      spaceId: target.spaceId,
+      threadId: target.threadId,
+      botId: target.botId,
+      runId: target.runId,
+      type: "agent.tool.completed",
+      payload: toolCompletionAuditPayload(completion, secrets),
+    });
+  } catch (error) {
+    // Audit persistence must not change the tool result or strand the run.
+    getLogger().warn("agent tool completion audit append failed", {
+      error: sanitizeConnectorError(error, secrets),
+      tool: redactSecrets(completion.name, secrets),
+      executionId: redactSecrets(completion.executionId, secrets),
+    });
+  }
 }
 
 export async function deferFutureRoutine(
@@ -3191,6 +3288,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
               allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun,
               emptyResponseText,
               executeTool: scripted ? undefined : applyTool,
+              onToolCompleted: (completion) =>
+                appendToolCompletionAudit(
+                  deps,
+                  {
+                    spaceId: run.spaceId,
+                    threadId: thread.id,
+                    botId: bot.id,
+                    runId,
+                  },
+                  completion,
+                  runSecrets,
+                ),
               claimSteering: scripted
                 ? undefined
                 : async (seenIds) => {
@@ -3454,8 +3563,47 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 return;
               }
               if (scripted) {
-                const result = await applyTool(event.name, event.args, event.executionId);
-                if (isToolPauseResult(result)) return;
+                const startedAt = Date.now();
+                try {
+                  const result = await applyTool(event.name, event.args, event.executionId);
+                  await appendToolCompletionAudit(
+                    deps,
+                    {
+                      spaceId: run.spaceId,
+                      threadId: thread.id,
+                      botId: bot.id,
+                      runId,
+                    },
+                    toolCompletionFromResult(
+                      {
+                        name: event.name,
+                        executionId: event.executionId,
+                        durationMs: Date.now() - startedAt,
+                      },
+                      result,
+                    ),
+                    runSecrets,
+                  );
+                  if (isToolPauseResult(result)) return;
+                } catch (error) {
+                  await appendToolCompletionAudit(
+                    deps,
+                    {
+                      spaceId: run.spaceId,
+                      threadId: thread.id,
+                      botId: bot.id,
+                      runId,
+                    },
+                    {
+                      name: event.name,
+                      executionId: event.executionId,
+                      durationMs: Date.now() - startedAt,
+                      error,
+                    },
+                    runSecrets,
+                  );
+                  throw error;
+                }
               }
             } else if (event.type === "subagent") {
               const safeTask = redactSecrets(event.task, runSecrets);

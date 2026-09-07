@@ -48,9 +48,11 @@ import {
   PipedreamConnector,
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
+  piSessionsRoot,
   pushTokenPath,
   type RemoteConnectorDependencies,
   reconcileCloudAgents,
+  removePiUserSessions,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceMemoryProviderResolver,
@@ -259,7 +261,11 @@ export async function createApp(
   void stack.composio?.warmDirectory().catch(() => undefined);
   void pipedream?.warmDirectory?.().catch(() => undefined);
   const runtime =
-    env.agentRuntime === "scripted" ? new ScriptedAgentRuntime() : new PiAgentRuntime();
+    env.agentRuntime === "scripted"
+      ? new ScriptedAgentRuntime()
+      : new PiAgentRuntime({
+          sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
+        });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
     secret: env.authSecret,
@@ -281,7 +287,7 @@ export async function createApp(
     beforeDeleteUser: async (userId) => {
       const bots = await prisma.bot.findMany({
         where: { userId },
-        select: { id: true, spaceId: true, name: true, archivedAt: true },
+        select: { id: true, userId: true, spaceId: true, name: true, archivedAt: true },
       });
       await Promise.all(
         bots.map((bot) =>
@@ -300,6 +306,7 @@ export async function createApp(
           ),
         ),
       );
+      await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
     },
   });

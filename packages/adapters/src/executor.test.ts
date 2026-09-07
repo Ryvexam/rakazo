@@ -3,6 +3,7 @@ import { ONCE_ROUTINE_CRON } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
+  appendToolCompletionAudit,
   createRunExecutor,
   createRunWorkspaceCheckpoint,
   loadCurrentTurnImages,
@@ -11,7 +12,94 @@ import {
   selectBuiltinToolsForRun,
   settleSteeringAttachmentLoads,
   threadContextForRun,
+  toolCompletionAuditPayload,
+  toolCompletionFromResult,
 } from "./executor.js";
+
+describe("tool completion audit", () => {
+  it("records result metadata without persisting tool contents", () => {
+    const payload = toolCompletionAuditPayload({
+      name: "computer_observe",
+      executionId: "call-1",
+      durationMs: 12.6,
+      result: {
+        kind: "agent_tool_result",
+        content: [
+          { type: "text", text: "Visible window" },
+          { type: "image", data: "image-bytes", mimeType: "image/png" },
+        ],
+        details: {
+          frameId: "frame-1",
+          capturedAt: "2026-09-07T00:00:00.000Z",
+          width: 1280,
+          height: 720,
+          activeWindow: { title: "Private window" },
+        },
+      },
+    });
+
+    expect(payload).toEqual({
+      name: "computer_observe",
+      executionId: "call-1",
+      durationMs: 13,
+      outcome: "succeeded",
+      contentTypes: ["text", "image"],
+      frameId: "frame-1",
+      capturedAt: "2026-09-07T00:00:00.000Z",
+      width: 1280,
+      height: 720,
+    });
+    expect(payload).not.toHaveProperty("content");
+    expect(payload).not.toHaveProperty("activeWindow");
+  });
+
+  it("does not fail the run when the audit append fails", async () => {
+    const append = vi.fn().mockRejectedValue(new Error("database unavailable"));
+
+    await expect(
+      appendToolCompletionAudit(
+        { events: { append } },
+        { spaceId: "space-1", threadId: "thread-1", botId: "bot-1", runId: "run-1" },
+        {
+          name: "destination.write",
+          executionId: "call-1",
+          durationMs: 4,
+          error: new Error("Bearer secret-token"),
+        },
+        ["secret-token"],
+      ),
+    ).resolves.toBeUndefined();
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "agent.tool.completed",
+        payload: expect.objectContaining({
+          outcome: "error",
+          error: "Bearer [redacted]",
+        }),
+      }),
+    );
+  });
+
+  it("records rejected scripted tool results as errors", () => {
+    const completion = toolCompletionFromResult(
+      { name: "destination.write", executionId: "call-1", durationMs: 4 },
+      { error: "destination rejected the record" },
+    );
+
+    expect(completion).toEqual({
+      name: "destination.write",
+      executionId: "call-1",
+      durationMs: 4,
+      error: "destination rejected the record",
+      paused: false,
+    });
+    expect(toolCompletionAuditPayload(completion)).toMatchObject({
+      outcome: "error",
+      error: "destination rejected the record",
+    });
+    expect(completion).not.toHaveProperty("result");
+  });
+});
 
 describe("run workspace checkpoint", () => {
   it("skips clean turns and flushes once after a mutation", async () => {
