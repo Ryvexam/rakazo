@@ -445,7 +445,6 @@ export function ShellPage() {
   const [botsSidebarCollapsed, setBotsSidebarCollapsed] = useState(false);
   const focusPromptAbortRef = useRef<AbortController | null>(null);
   const focusPromptBotIdRef = useRef<string | null>(null);
-  const creatingBotRef = useRef(false);
   const botsSidebarEdgeDragRef = useRef<{ startX: number; mode: "expand" | "collapse" } | null>(
     null,
   );
@@ -2180,24 +2179,6 @@ export function ShellPage() {
     await refreshBots().catch(() => undefined);
   }
 
-  async function createBotQuick(computerMode: ComputerMode = "team") {
-    if (creatingBotRef.current) return;
-    creatingBotRef.current = true;
-    try {
-      await createBot({
-        name: "New Bot",
-        title: "",
-        description: "",
-        computerMode,
-      });
-    } catch (error) {
-      // Keep the current chat open when create fails, but surface the error.
-      setSendError(error instanceof Error ? error.message : t`Could not create bot`);
-    } finally {
-      creatingBotRef.current = false;
-    }
-  }
-
   async function bootComputer({
     takeControl,
     overlay,
@@ -2485,9 +2466,10 @@ export function ShellPage() {
                 >
                   <BotCreatePicker
                     bots={bots}
-                    onCreateBot={(computerMode) => {
+                    onCreateBot={() => {
                       setCreateMenuOpen(false);
-                      void createBotQuick(computerMode);
+                      setMobileSidebarOpen(false);
+                      setPanel("create");
                     }}
                     onOpenBot={(id) => {
                       setCreateMenuOpen(false);
@@ -2496,10 +2478,12 @@ export function ShellPage() {
                     }}
                     onCreateGroup={() => {
                       setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
                       setPanel("create-group");
                     }}
                     onCreateSpace={() => {
                       setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
                       setNewSpaceOpen(true);
                     }}
                   />
