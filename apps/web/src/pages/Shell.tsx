@@ -2486,7 +2486,10 @@ export function ShellPage() {
             </Popover>
           </div>
         </div>
-        <InputGroup data-testid="sidebar-search" className="mx-2.5 mb-3 w-auto rounded-xl bg-card">
+        <InputGroup
+          data-testid="sidebar-search"
+          className="mx-2.5 mb-3 w-auto rounded-xl bg-card dark:bg-input"
+        >
           <InputGroupAddon>
             <Search size={16} strokeWidth={1.8} aria-hidden="true" />
           </InputGroupAddon>
@@ -2527,7 +2530,7 @@ export function ShellPage() {
                       <div className="pt-2">
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                           onClick={() => {
                             if (group.emptySpaceId) {
                               openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -2634,8 +2637,8 @@ export function ShellPage() {
                           } ${
                             (item.kind === "bot" && !inGroup && active?.id === item.chat.id) ||
                             (item.kind === "group" && inGroup && activeGroup?.id === item.chat.id)
-                              ? "bg-card"
-                              : "hover:bg-background"
+                              ? "bg-sidebar-accent"
+                              : "hover:bg-sidebar-accent"
                           }`}
                           style={{
                             opacity:
@@ -2737,7 +2740,7 @@ export function ShellPage() {
                 type="button"
                 aria-expanded={archivedOpen}
                 onClick={() => setArchivedOpen((open) => !open)}
-                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13.5px] text-muted-foreground hover:bg-background"
+                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13.5px] text-muted-foreground hover:bg-sidebar-accent"
               >
                 <span>
                   <Trans>Archived</Trans>
@@ -2819,7 +2822,7 @@ export function ShellPage() {
         <button
           type="button"
           onClick={() => setPluginsOpen(true)}
-          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-background"
+          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-sidebar-accent"
         >
           <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-muted text-foreground/75">
             <Puzzle size={15} strokeWidth={1.7} />
@@ -5439,7 +5442,7 @@ const MessageView = memo(function MessageView({
             <div key={i} className="flex w-fit max-w-full justify-end">
               <div
                 data-testid="message-user-bubble"
-                className="max-w-full whitespace-pre-wrap wrap-anywhere rounded-[20px] bg-secondary px-[18px] py-3 text-[15.5px] leading-[1.45] text-secondary-foreground"
+                className="max-w-full whitespace-pre-wrap wrap-anywhere rounded-[20px] bg-chat-user px-[18px] py-3 text-[15.5px] leading-[1.45] text-chat-user-foreground"
                 dir="auto"
               >
                 {block.text}
