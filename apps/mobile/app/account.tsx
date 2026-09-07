@@ -406,7 +406,7 @@ export default function Account() {
           <View>
             <Text style={styles.settingsTitle}>{t("Voice")}</Text>
             <Text style={styles.settingsExplanation}>
-              {t("Speak replies aloud with ElevenLabs, OpenAI, or Cartesia")}
+              {t("Speak replies aloud with ElevenLabs, OpenAI, Cartesia, or Fish Audio")}
             </Text>
           </View>
           <Text style={styles.chevron}>›</Text>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CartesiaVoiceProvider } from "./cartesia-voice.js";
 import { ElevenLabsVoiceProvider } from "./elevenlabs-voice.js";
+import { FishAudioVoiceProvider, fishAudioTtsConfig } from "./fish-audio-voice.js";
 import { OpenAIVoiceProvider } from "./openai-voice.js";
 import {
   SCRIPTED_MPEG,
@@ -28,6 +29,7 @@ const previousRuntime = process.env.AGENT_RUNTIME;
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   if (previousRuntime === undefined) delete process.env.AGENT_RUNTIME;
   else process.env.AGENT_RUNTIME = previousRuntime;
 });
@@ -35,15 +37,22 @@ afterEach(() => {
 describe("createVoiceProvider", () => {
   it("exposes the hosted catalog behind one factory", () => {
     process.env.AGENT_RUNTIME = "pi";
-    expect(VOICE_CATALOG.map((entry) => entry.id)).toEqual(["elevenlabs", "openai", "cartesia"]);
+    expect(VOICE_CATALOG.map((entry) => entry.id)).toEqual([
+      "elevenlabs",
+      "openai",
+      "cartesia",
+      "fish-audio",
+    ]);
     expect(listVoiceCatalog().map((entry) => entry.id)).toEqual([
       "elevenlabs",
       "openai",
       "cartesia",
+      "fish-audio",
     ]);
     expect(createVoiceProvider("elevenlabs").describe().id).toBe("elevenlabs");
     expect(createVoiceProvider("openai").describe().capabilities.transcribe).toBe(true);
     expect(createVoiceProvider("cartesia").describe().capabilities.transcribe).toBe(false);
+    expect(createVoiceProvider("fish-audio").describe().capabilities.transcribe).toBe(true);
     expect(isVoiceProviderId("elevenlabs")).toBe(true);
     expect(isVoiceProviderId("scripted")).toBe(false);
     expect(isVoiceProviderId("piper")).toBe(false);
@@ -166,11 +175,103 @@ describe("CartesiaVoiceProvider", () => {
   });
 });
 
+describe("FishAudioVoiceProvider", () => {
+  it("lists public and own voice models without duplicates", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [{ _id: "public-id", title: "Public Voice", languages: ["en", "fr"] }],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [
+              { _id: "private-id", title: "Private Voice", description: "My clone" },
+              { _id: "public-id", title: "Duplicate" },
+              { _id: "failed-id", title: "Failed", state: "failed" },
+            ],
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const voices = await new FishAudioVoiceProvider().listVoices("sk-test", ctx);
+
+    expect(voices).toEqual([
+      { id: "public-id", label: "Public Voice", description: "en, fr" },
+      { id: "private-id", label: "Private Voice", description: "My clone" },
+    ]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("page_size=100");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("self=true");
+  });
+
+  it("synthesizes with the Fish Audio TTS contract", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([7, 8]).buffer,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const clip = await new FishAudioVoiceProvider().synthesize(
+      { text: "Hi", voiceId: "voice-id", apiKey: "sk-test" },
+      ctx,
+    );
+
+    expect(clip.mimeType).toBe("audio/mpeg");
+    expect([...clip.bytes]).toEqual([7, 8]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.fish.audio/v1/tts");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>).model).toBe("s2.1-pro");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      text: "Hi",
+      reference_id: "voice-id",
+      format: "mp3",
+    });
+  });
+
+  it("uses deployment-configured TTS settings", () => {
+    vi.stubEnv("FISH_AUDIO_TTS_MODEL", "s2-pro");
+    vi.stubEnv("FISH_AUDIO_TTS_LATENCY", "low");
+    vi.stubEnv("FISH_AUDIO_TTS_MP3_BITRATE", "192");
+    vi.stubEnv("FISH_AUDIO_TTS_NORMALIZE", "false");
+
+    expect(fishAudioTtsConfig()).toEqual({
+      model: "s2-pro",
+      latency: "low",
+      mp3Bitrate: 192,
+      normalize: false,
+    });
+  });
+
+  it("transcribes through Fish Audio ASR", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ text: "hello" })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      new FishAudioVoiceProvider().transcribe!(
+        { audio: new Uint8Array([1]), mimeType: "audio/ogg;codecs=opus", apiKey: "sk-test" },
+        ctx,
+      ),
+    ).resolves.toEqual({ text: "hello" });
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.fish.audio/v1/asr");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const form = init.body as FormData;
+    expect((form.get("audio") as File).name).toBe("speech.ogg");
+    expect(form.get("ignore_timestamps")).toBe("true");
+  });
+});
+
 describe("hosted voice response limits", () => {
   it.each([
     ["ElevenLabs", () => new ElevenLabsVoiceProvider(), "voice"],
     ["OpenAI", () => new OpenAIVoiceProvider(), "alloy"],
     ["Cartesia", () => new CartesiaVoiceProvider(), "sonic"],
+    ["Fish Audio", () => new FishAudioVoiceProvider(), "voice"],
   ])(
     "rejects an oversized %s speech response before buffering it",
     async (_name, create, voiceId) => {
