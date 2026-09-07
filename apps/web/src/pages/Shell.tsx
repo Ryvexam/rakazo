@@ -104,6 +104,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  type ClipboardEvent,
   type DragEvent,
   lazy,
   type MutableRefObject,
@@ -153,7 +154,11 @@ import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { localTimezone } from "../lib/local-timezone";
 import { copyableMessageText } from "../lib/message-text";
 import { messageProviderLabel } from "../lib/messaging";
-import { isFileDrag, revokePendingAttachmentPreviews } from "../lib/pending-attachments";
+import {
+  isFileDrag,
+  isFilePaste,
+  revokePendingAttachmentPreviews,
+} from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { clearSpaceSelection, rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
@@ -4568,6 +4573,24 @@ const Composer = memo(function Composer({
     if (!disabled) void onAttachmentPick(dataTransfer.files);
   }
 
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const clipboardData = event.clipboardData;
+    // Only intercept real FileList pastes; leave text-only / empty-files native.
+    if (disabled || !clipboardData || !isFilePaste(clipboardData)) return;
+    event.preventDefault();
+    void onAttachmentPick(clipboardData.files);
+    const text = clipboardData.getData("text/plain");
+    if (!text) return;
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    updateDraft(`${draft.slice(0, start)}${text}${draft.slice(end)}`);
+    const caret = start + text.length;
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(caret, caret);
+    });
+  }
+
   const showComposerPlaceholder =
     draft.length === 0 && selectedSkill === null && selectedMentions.length === 0;
   const replyName = replyTarget ? (replyTargetName ?? previewMessageText(replyTarget)) : "";
@@ -4840,6 +4863,7 @@ const Composer = memo(function Composer({
             ref={textareaRef}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(event) => {
               if (
                 event.key === "Backspace" &&
