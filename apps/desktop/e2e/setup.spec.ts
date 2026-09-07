@@ -67,8 +67,10 @@ function launch(extraEnv: Record<string, string> = {}) {
   const env = { ...process.env, RAKAZO_PERFORMANCE_USER_DATA: userData };
   // A stale RAKAZO_WEB_URL from the developer's shell would bypass setup entirely.
   delete env.RAKAZO_WEB_URL;
+  const executablePath = process.env.RAKAZO_E2E_EXECUTABLE;
   return electron.launch({
-    args: ["."],
+    ...(executablePath ? { executablePath: path.resolve(executablePath) } : {}),
+    args: executablePath ? [] : ["."],
     cwd: path.resolve(import.meta.dirname, ".."),
     env: { ...env, ...extraEnv },
   });
@@ -76,6 +78,9 @@ function launch(extraEnv: Record<string, string> = {}) {
 
 test("first run asks whether to use a local or existing instance", async () => {
   app = await launch();
+  if (process.env.RAKAZO_E2E_EXECUTABLE) {
+    expect(await app.evaluate(({ app }) => app.isPackaged)).toBe(true);
+  }
   const setup = await app.firstWindow();
 
   await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
@@ -103,6 +108,12 @@ test("first run asks whether to use a local or existing instance", async () => {
   await expect(setup.locator(".titlebar")).toHaveCSS("padding-left", "88px");
   expect((await setup.locator(".titlebar-name").boundingBox())?.x).toBeGreaterThanOrEqual(88);
   if (process.platform === "darwin") {
+    if (process.env.CI) {
+      await execFileAsync("screencapture", [
+        "-x",
+        path.join(import.meta.dirname, "screenshots", "09-macos-dock.png"),
+      ]);
+    }
     await app.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0];
       if (window === undefined) throw new Error("Setup window is unavailable");
