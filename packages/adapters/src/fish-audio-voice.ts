@@ -20,44 +20,7 @@ import {
 
 const API = "https://api.fish.audio";
 const MODEL_PAGE_SIZE = 100;
-const DEFAULT_TTS_MODEL = "s2.1-pro";
-const DEFAULT_TTS_LATENCY = "balanced";
-const DEFAULT_MP3_BITRATE = 64;
-const TTS_LATENCIES = ["low", "normal", "balanced"] as const;
-const MP3_BITRATES = [64, 128, 192] as const;
-
-type FishAudioTtsConfig = {
-  model: string;
-  latency: (typeof TTS_LATENCIES)[number];
-  mp3Bitrate: (typeof MP3_BITRATES)[number];
-  normalize: boolean;
-};
-
-export function fishAudioTtsConfig(): FishAudioTtsConfig {
-  const model = process.env.FISH_AUDIO_TTS_MODEL?.trim() || DEFAULT_TTS_MODEL;
-  const latency = process.env.FISH_AUDIO_TTS_LATENCY?.trim() || DEFAULT_TTS_LATENCY;
-  if (!TTS_LATENCIES.includes(latency as (typeof TTS_LATENCIES)[number])) {
-    throw new Error(`FISH_AUDIO_TTS_LATENCY must be one of ${TTS_LATENCIES.join(", ")}.`);
-  }
-
-  const bitrateText = process.env.FISH_AUDIO_TTS_MP3_BITRATE?.trim();
-  const mp3Bitrate = bitrateText ? Number(bitrateText) : DEFAULT_MP3_BITRATE;
-  if (!MP3_BITRATES.includes(mp3Bitrate as (typeof MP3_BITRATES)[number])) {
-    throw new Error(`FISH_AUDIO_TTS_MP3_BITRATE must be one of ${MP3_BITRATES.join(", ")}.`);
-  }
-
-  const normalizeText = process.env.FISH_AUDIO_TTS_NORMALIZE?.trim().toLowerCase();
-  if (normalizeText && normalizeText !== "true" && normalizeText !== "false") {
-    throw new Error("FISH_AUDIO_TTS_NORMALIZE must be true or false.");
-  }
-
-  return {
-    model,
-    latency: latency as (typeof TTS_LATENCIES)[number],
-    mp3Bitrate: mp3Bitrate as (typeof MP3_BITRATES)[number],
-    normalize: normalizeText !== "false",
-  };
-}
+const TTS_MODEL = "s2.1-pro";
 
 export class FishAudioVoiceProvider implements VoiceProvider {
   describe(): AdapterDescriptor<VoiceCapabilities> {
@@ -110,22 +73,21 @@ export class FishAudioVoiceProvider implements VoiceProvider {
 
   async synthesize(request: VoiceSynthesizeRequest, context: AdapterContext): Promise<SpeechClip> {
     const signal = voiceDeadline(request.signal ?? context.signal, 60_000);
-    const config = fishAudioTtsConfig();
     const res = await fetch(`${API}/v1/tts`, {
       method: "POST",
       headers: {
         ...fishAudioHeaders(request.apiKey),
         "content-type": "application/json",
         accept: "audio/mpeg",
-        model: config.model,
+        model: TTS_MODEL,
       },
       body: JSON.stringify({
         text: request.text,
         reference_id: request.voiceId,
         format: "mp3",
-        mp3_bitrate: config.mp3Bitrate,
-        latency: config.latency,
-        normalize: config.normalize,
+        mp3_bitrate: 64,
+        latency: "balanced",
+        normalize: true,
       }),
       signal,
     });
