@@ -25,6 +25,7 @@ const MODEL_PAGE_CAP = 20;
 const TTS_MODEL = "s2.1-pro";
 
 export class FishAudioVoiceProvider implements VoiceProvider {
+  /** Advertise Fish Audio's model catalog, speech synthesis, and transcription support. */
   describe(): AdapterDescriptor<VoiceCapabilities> {
     return {
       id: "fish-audio",
@@ -34,6 +35,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     };
   }
 
+  /** Verify the user's Fish Audio API key against the model catalog endpoint. */
   async verify(apiKey: string, context: AdapterContext): Promise<VoiceVerifyResult> {
     try {
       const res = await fetch(`${API}/model?page_size=1&page_number=1`, {
@@ -58,6 +60,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     }
   }
 
+  /** Return public and user-owned Fish Audio voice models as Rakazo voice choices. */
   async listVoices(apiKey: string, context: AdapterContext): Promise<VoiceInfo[]> {
     const [publicModels, ownModels] = await Promise.all([
       fetchModels(apiKey, context, false),
@@ -71,6 +74,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     });
   }
 
+  /** Synthesize one Rakazo utterance as bounded MP3 audio. */
   async synthesize(request: VoiceSynthesizeRequest, context: AdapterContext): Promise<SpeechClip> {
     const signal = voiceDeadline(request.signal ?? context.signal, 60_000);
     const res = await fetch(`${API}/v1/tts`, {
@@ -95,6 +99,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     return { bytes: await readVoiceAudio(res, signal), mimeType: "audio/mpeg" };
   }
 
+  /** Transcribe a browser recording through Fish Audio's multipart ASR endpoint. */
   async transcribe(
     request: VoiceTranscribeRequest,
     context: AdapterContext,
@@ -118,6 +123,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
   }
 }
 
+/** Fetch public or user-owned Fish Audio voice models across available pages. */
 async function fetchModels(
   apiKey: string,
   context: AdapterContext,
@@ -144,6 +150,7 @@ async function fetchModels(
   return models;
 }
 
+/** Decide whether another Fish Audio model page should be requested. */
 function modelPageHasMore(body: unknown, pageNumber: number, itemCount: number): boolean {
   if (!body || typeof body !== "object") return false;
   const meta = body as { has_more?: unknown; total?: unknown };
@@ -154,10 +161,12 @@ function modelPageHasMore(body: unknown, pageNumber: number, itemCount: number):
   return itemCount === MODEL_PAGE_SIZE;
 }
 
+/** Build the authorization header shared by Fish Audio requests. */
 function fishAudioHeaders(apiKey: string): Record<string, string> {
   return { authorization: `Bearer ${apiKey}` };
 }
 
+/** Extract object-shaped model entries from a Fish Audio list response. */
 function modelsFrom(body: unknown): Array<Record<string, unknown>> {
   if (!body || typeof body !== "object") return [];
   const items = (body as { items?: unknown }).items;
@@ -168,6 +177,7 @@ function modelsFrom(body: unknown): Array<Record<string, unknown>> {
     : [];
 }
 
+/** Convert a Fish Audio model into the provider-neutral voice shape. */
 function modelToVoice(model: Record<string, unknown>): VoiceInfo | null {
   if (model.dmca_taken_down === true || model.state === "failed") return null;
   const id = asText(model._id) || asText(model.id);
@@ -179,10 +189,12 @@ function modelToVoice(model: Record<string, unknown>): VoiceInfo | null {
   return { id, label, description };
 }
 
+/** Read a trimmed string field from an untyped provider response. */
 function asText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Format the model language list for the voice picker description. */
 function languageLabel(value: unknown): string {
   if (!Array.isArray(value)) return "";
   return value

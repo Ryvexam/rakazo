@@ -47,6 +47,7 @@ import { native, useThemedStyles } from "../lib/native";
 import { registerPushToken } from "../lib/push";
 import { UI_LOCALE_LABELS, UI_LOCALES, type UiLocale } from "../lib/ui-locale";
 
+/** Render account settings, including the entry point for voice configuration. */
 export default function Account() {
   const { t, locale } = useI18n();
   const router = useRouter();
