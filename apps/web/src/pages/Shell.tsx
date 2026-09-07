@@ -100,6 +100,7 @@ import {
   Settings,
   Smile,
   Square,
+  Trash2,
   Volume2,
   X,
 } from "lucide-react";
@@ -483,6 +484,18 @@ export function ShellPage() {
   }, [botMenu]);
   const [deleteTarget, setDeleteTarget] = useState<Bot | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+  const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<Space | null>(null);
+  const [spaceMenu, setSpaceMenu] = useState<{
+    id: string;
+    position: ContextMenuPosition;
+  } | null>(null);
+  const spaceMenuAnchor = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (spaceMenu || !spaceMenuAnchor.current) return;
+    spaceMenuAnchor.current.focus();
+    spaceMenuAnchor.current = null;
+  }, [spaceMenu]);
+  const closeSpaceMenu = useCallback(() => setSpaceMenu(null), []);
   const [clearTarget, setClearTarget] = useState<
     { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null
   >(null);
@@ -738,8 +751,12 @@ export function ShellPage() {
           list.length === 0 &&
           archived?.length === 0 &&
           groupList.length === 0 &&
-          archivedGroupList?.length === 0
+          archivedGroupList?.length === 0 &&
+          !navigation.spaces.some((space) => space.hasContent)
         ) {
+          // Only the very first bot everywhere needs onboarding. An empty
+          // current space with content elsewhere stays in the app so the
+          // space can be switched to or deleted instead of trapping the user.
           navigate("/onboarding", { replace: true });
           return;
         }
@@ -964,7 +981,8 @@ export function ShellPage() {
           bootstrap.bots.length === 0 &&
           bootstrap.archivedBots.length === 0 &&
           groupList.length === 0 &&
-          bootstrap.archivedGroups.length === 0
+          bootstrap.archivedGroups.length === 0 &&
+          !bootstrap.spaces.some((space) => space.hasContent)
         ) {
           navigate("/onboarding", { replace: true });
           return;
@@ -1280,6 +1298,7 @@ export function ShellPage() {
                 id: bootstrapMe.spaceId,
                 name: "Personal",
                 isDefault: true,
+                hasContent: true,
                 bots,
                 groups,
                 botSections,
@@ -1310,6 +1329,9 @@ export function ShellPage() {
           : group.title,
         showLock: showSpaceNames,
         emptySpaceId: undefined as string | undefined,
+        spaceId: space.id,
+        spaceName: space.name,
+        spaceIsDefault: space.isDefault,
       }));
       if (sections.length > 0) return sections;
       // Keep empty spaces selectable; chat clicks are the only switch control.
@@ -1322,6 +1344,9 @@ export function ShellPage() {
           bots: [],
           showLock: true,
           emptySpaceId: space.id,
+          spaceId: space.id,
+          spaceName: space.name,
+          spaceIsDefault: space.isDefault,
         },
       ];
     });
@@ -2556,6 +2581,18 @@ export function ShellPage() {
                             }
                             toggleSidebarSection(group.key);
                           }}
+                          onContextMenu={
+                            group.spaceId && !group.spaceIsDefault
+                              ? (event) => {
+                                  event.preventDefault();
+                                  spaceMenuAnchor.current = event.currentTarget;
+                                  setSpaceMenu({
+                                    id: group.spaceId as string,
+                                    position: { x: event.clientX, y: event.clientY },
+                                  });
+                                }
+                              : undefined
+                          }
                           aria-expanded={group.emptySpaceId ? undefined : !collapsed}
                           aria-label={
                             group.emptySpaceId
@@ -3610,6 +3647,46 @@ export function ShellPage() {
           />
         ) : null}
 
+        {spaceMenu ? (
+          <DropdownMenu
+            open
+            onOpenChange={(open) => {
+              if (!open) closeSpaceMenu();
+            }}
+          >
+            {/* Invisible anchor at the pointer position, mirroring the bot menu. */}
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-hidden
+                  className="fixed size-0 p-0 opacity-0"
+                  style={{ left: spaceMenu.position.x, top: spaceMenu.position.y }}
+                />
+              }
+            />
+            <DropdownMenuContent
+              aria-label={t`Actions for space`}
+              align="start"
+              sideOffset={0}
+              className="w-[220px]"
+            >
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  const target = spaces.find((space) => space.id === spaceMenu.id);
+                  if (target) setDeleteSpaceTarget(target);
+                  setSpaceMenu(null);
+                }}
+              >
+                <Trash2 />
+                {t`Delete space`}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
         {deleteTarget ? (
           <DeleteBotDialog
             bot={deleteTarget}
@@ -3632,6 +3709,32 @@ export function ShellPage() {
               await rpc.groups.remove({ groupId: deleteGroupTarget.id });
               setDeleteGroupTarget(null);
               setPanel(null);
+              await refreshBots(true);
+            }}
+          />
+        ) : null}
+
+        {deleteSpaceTarget ? (
+          <DeleteItemDialog
+            item={deleteSpaceTarget}
+            noun="space"
+            description={
+              <Trans>Only empty spaces can be deleted. Delete its bots and groups first.</Trans>
+            }
+            onCancel={() => setDeleteSpaceTarget(null)}
+            onConfirm={async () => {
+              const targetId = deleteSpaceTarget.id;
+              const result = await rpc.spaces.remove({ spaceId: targetId });
+              setDeleteSpaceTarget(null);
+              setPanel(null);
+              const effectiveSpaceId = selectedSpaceId() ?? bootstrapMe?.spaceId;
+              if (effectiveSpaceId === targetId) {
+                // The auth boundary changed, so reload like a space switch.
+                if (selectSpace(result.activeSpaceId)) {
+                  window.location.assign("/app");
+                  return;
+                }
+              }
               await refreshBots(true);
             }}
           />
