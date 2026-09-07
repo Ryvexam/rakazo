@@ -35,7 +35,7 @@ export function OnboardingPage() {
   const [query, setQuery] = useState("");
   const [showAllProviders, setShowAllProviders] = useState(false);
   const [provider, setProvider] = useState("openrouter");
-  const [modelId, setModelId] = useState("deepseek/deepseek-v4-flash-0731");
+  const [modelId, setModelId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [reasoning, setReasoning] = useState(false);
@@ -143,6 +143,13 @@ export function OnboardingPage() {
     probedBaseUrl,
   });
 
+  const canSaveModel = Boolean(
+    selected &&
+      modelId.trim() &&
+      !oauthPending &&
+      (isOpenAiCompatible ? openAiCompatibleReady : acceptsKey && apiKey.trim()),
+  );
+
   function updateBaseUrl(nextBaseUrl: string) {
     setBaseUrl(nextBaseUrl);
     resetOpenAiCompatibleProbe();
@@ -173,6 +180,7 @@ export function OnboardingPage() {
   }
 
   async function saveModel() {
+    if (!canSaveModel) return;
     setError(null);
     try {
       if (isOpenAiCompatible) {
@@ -557,10 +565,7 @@ export function OnboardingPage() {
             {notice ? <p className="mt-3 text-sm text-success">{notice}</p> : null}
             {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
             <div className="mt-6 flex gap-3">
-              <Button
-                disabled={oauthPending || (isOpenAiCompatible && !openAiCompatibleReady)}
-                onClick={() => void saveModel()}
-              >
+              <Button disabled={!canSaveModel} onClick={() => void saveModel()}>
                 <Trans>Continue</Trans>
               </Button>
             </div>
