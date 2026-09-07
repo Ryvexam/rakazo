@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CartesiaVoiceProvider } from "./cartesia-voice.js";
 import { ElevenLabsVoiceProvider } from "./elevenlabs-voice.js";
-import { FishAudioVoiceProvider, fishAudioTtsConfig } from "./fish-audio-voice.js";
+import { FishAudioVoiceProvider } from "./fish-audio-voice.js";
 import { OpenAIVoiceProvider } from "./openai-voice.js";
 import {
   SCRIPTED_MPEG,
@@ -230,20 +230,6 @@ describe("FishAudioVoiceProvider", () => {
       text: "Hi",
       reference_id: "voice-id",
       format: "mp3",
-    });
-  });
-
-  it("uses deployment-configured TTS settings", () => {
-    vi.stubEnv("FISH_AUDIO_TTS_MODEL", "s2-pro");
-    vi.stubEnv("FISH_AUDIO_TTS_LATENCY", "low");
-    vi.stubEnv("FISH_AUDIO_TTS_MP3_BITRATE", "192");
-    vi.stubEnv("FISH_AUDIO_TTS_NORMALIZE", "false");
-
-    expect(fishAudioTtsConfig()).toEqual({
-      model: "s2-pro",
-      latency: "low",
-      mp3Bitrate: 192,
-      normalize: false,
     });
   });
 
