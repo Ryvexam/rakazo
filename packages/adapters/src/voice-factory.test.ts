@@ -209,6 +209,72 @@ describe("FishAudioVoiceProvider", () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("self=true");
   });
 
+  it("pages through Fish Audio model listings until has_more is false", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const page = Number(url.searchParams.get("page_number") ?? "1");
+      const own = url.searchParams.get("self") === "true";
+      const prefix = own ? "own" : "pub";
+      return new Response(
+        JSON.stringify({
+          total: 2,
+          has_more: page < 2,
+          items: [{ _id: `${prefix}-${page}`, title: `${own ? "Own" : "Public"} ${page}` }],
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const voices = await new FishAudioVoiceProvider().listVoices("sk-test", ctx);
+
+    expect(voices.map((voice) => voice.id)).toEqual(["pub-1", "pub-2", "own-1", "own-2"]);
+    expect(voices.some((voice) => voice.label === "Public 2")).toBe(true);
+    expect(voices.some((voice) => voice.label === "Own 2")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(
+      fetchMock.mock.calls
+        .map((call) => String(call[0]))
+        .filter((url) => url.includes("page_number=2")),
+    ).toHaveLength(2);
+  });
+
+  it("keeps paging when total implies more pages without has_more", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const page = Number(url.searchParams.get("page_number") ?? "1");
+      const own = url.searchParams.get("self") === "true";
+      if (own) {
+        return new Response(
+          JSON.stringify({ total: 1, items: [{ _id: "own-only", title: "Own" }] }),
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          total: 101,
+          items:
+            page === 1
+              ? Array.from({ length: 100 }, (_, index) => ({
+                  _id: `pub-${index + 1}`,
+                  title: `Public ${index + 1}`,
+                }))
+              : [{ _id: "pub-101", title: "Public 101" }],
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const voices = await new FishAudioVoiceProvider().listVoices("sk-test", ctx);
+
+    expect(voices.some((voice) => voice.id === "pub-101")).toBe(true);
+    expect(voices.some((voice) => voice.label === "Public 101")).toBe(true);
+    expect(
+      fetchMock.mock.calls.some(
+        (call) =>
+          String(call[0]).includes("page_number=2") && !String(call[0]).includes("self=true"),
+      ),
+    ).toBe(true);
+  });
+
   it("synthesizes with the Fish Audio TTS contract", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
