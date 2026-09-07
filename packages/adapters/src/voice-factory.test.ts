@@ -275,6 +275,41 @@ describe("FishAudioVoiceProvider", () => {
     ).toBe(true);
   });
 
+  it("does not truncate catalogs after twenty pages", async () => {
+    const total = 2_101;
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const page = Number(url.searchParams.get("page_number") ?? "1");
+      const own = url.searchParams.get("self") === "true";
+      if (own) {
+        return new Response(JSON.stringify({ total: 0, items: [] }));
+      }
+      const start = (page - 1) * 100;
+      const count = Math.min(100, total - start);
+      return new Response(
+        JSON.stringify({
+          total,
+          has_more: start + count < total,
+          items: Array.from({ length: count }, (_, index) => ({
+            _id: `public-${start + index + 1}`,
+            title: `Public ${start + index + 1}`,
+          })),
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const voices = await new FishAudioVoiceProvider().listVoices("sk-test", ctx);
+
+    expect(voices).toHaveLength(total);
+    expect(voices.at(-1)).toEqual({
+      id: `public-${total}`,
+      label: `Public ${total}`,
+      description: undefined,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(23);
+  });
+
   it("synthesizes with the Fish Audio TTS contract", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

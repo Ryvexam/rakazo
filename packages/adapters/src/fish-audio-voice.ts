@@ -20,8 +20,6 @@ import {
 
 const API = "https://api.fish.audio";
 const MODEL_PAGE_SIZE = 100;
-/** Cap pages per query so a bad total/has_more cannot loop forever. */
-const MODEL_PAGE_CAP = 20;
 const TTS_MODEL = "s2.1-pro";
 
 export class FishAudioVoiceProvider implements VoiceProvider {
@@ -130,7 +128,7 @@ async function fetchModels(
   own: boolean,
 ): Promise<Array<Record<string, unknown>>> {
   const models: Array<Record<string, unknown>> = [];
-  for (let pageNumber = 1; pageNumber <= MODEL_PAGE_CAP; pageNumber++) {
+  for (let pageNumber = 1; ; pageNumber++) {
     const params = new URLSearchParams({
       page_size: String(MODEL_PAGE_SIZE),
       page_number: String(pageNumber),
@@ -145,7 +143,7 @@ async function fetchModels(
     if (!res.ok) throw new Error(voiceHttpError(res.status, "Fish Audio", "listing voices", body));
     const items = modelsFrom(body);
     models.push(...items);
-    if (!modelPageHasMore(body, pageNumber, items.length)) break;
+    if (items.length === 0 || !modelPageHasMore(body, pageNumber, items.length)) break;
   }
   return models;
 }
