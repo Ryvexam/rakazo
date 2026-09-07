@@ -20,6 +20,8 @@ import {
 
 const API = "https://api.fish.audio";
 const MODEL_PAGE_SIZE = 100;
+/** Cap pages per query so a bad total/has_more cannot loop forever. */
+const MODEL_PAGE_CAP = 20;
 const TTS_MODEL = "s2.1-pro";
 
 export class FishAudioVoiceProvider implements VoiceProvider {
@@ -58,17 +60,15 @@ export class FishAudioVoiceProvider implements VoiceProvider {
 
   async listVoices(apiKey: string, context: AdapterContext): Promise<VoiceInfo[]> {
     const [publicModels, ownModels] = await Promise.all([
-      fetchModelPage(apiKey, context, false),
-      fetchModelPage(apiKey, context, true),
+      fetchModels(apiKey, context, false),
+      fetchModels(apiKey, context, true),
     ]);
     const seen = new Set<string>();
-    return [...modelsFrom(publicModels), ...modelsFrom(ownModels)]
-      .map(modelToVoice)
-      .filter((voice): voice is VoiceInfo => {
-        if (!voice || seen.has(voice.id)) return false;
-        seen.add(voice.id);
-        return true;
-      });
+    return [...publicModels, ...ownModels].map(modelToVoice).filter((voice): voice is VoiceInfo => {
+      if (!voice || seen.has(voice.id)) return false;
+      seen.add(voice.id);
+      return true;
+    });
   }
 
   async synthesize(request: VoiceSynthesizeRequest, context: AdapterContext): Promise<SpeechClip> {
@@ -118,24 +118,40 @@ export class FishAudioVoiceProvider implements VoiceProvider {
   }
 }
 
-async function fetchModelPage(
+async function fetchModels(
   apiKey: string,
   context: AdapterContext,
   own: boolean,
-): Promise<unknown> {
-  const params = new URLSearchParams({
-    page_size: String(MODEL_PAGE_SIZE),
-    page_number: "1",
-    sort_by: "score",
-  });
-  if (own) params.set("self", "true");
-  const res = await fetch(`${API}/model?${params}`, {
-    headers: fishAudioHeaders(apiKey),
-    signal: voiceDeadline(context.signal, 20_000),
-  });
-  const body = await readVoiceJson(res, { requireValid: res.ok });
-  if (!res.ok) throw new Error(voiceHttpError(res.status, "Fish Audio", "listing voices", body));
-  return body;
+): Promise<Array<Record<string, unknown>>> {
+  const models: Array<Record<string, unknown>> = [];
+  for (let pageNumber = 1; pageNumber <= MODEL_PAGE_CAP; pageNumber++) {
+    const params = new URLSearchParams({
+      page_size: String(MODEL_PAGE_SIZE),
+      page_number: String(pageNumber),
+      sort_by: "score",
+    });
+    if (own) params.set("self", "true");
+    const res = await fetch(`${API}/model?${params}`, {
+      headers: fishAudioHeaders(apiKey),
+      signal: voiceDeadline(context.signal, 20_000),
+    });
+    const body = await readVoiceJson(res, { requireValid: res.ok });
+    if (!res.ok) throw new Error(voiceHttpError(res.status, "Fish Audio", "listing voices", body));
+    const items = modelsFrom(body);
+    models.push(...items);
+    if (!modelPageHasMore(body, pageNumber, items.length)) break;
+  }
+  return models;
+}
+
+function modelPageHasMore(body: unknown, pageNumber: number, itemCount: number): boolean {
+  if (!body || typeof body !== "object") return false;
+  const meta = body as { has_more?: unknown; total?: unknown };
+  if (typeof meta.has_more === "boolean") return meta.has_more;
+  if (typeof meta.total === "number" && Number.isFinite(meta.total)) {
+    return pageNumber * MODEL_PAGE_SIZE < meta.total;
+  }
+  return itemCount === MODEL_PAGE_SIZE;
 }
 
 function fishAudioHeaders(apiKey: string): Record<string, string> {
