@@ -37,10 +37,12 @@ import { useModelOAuthSignIn } from "../lib/use-model-oauth-signin";
 export function ModelSettingsOverlay({
   onClose,
   embedded = false,
+  localOwner = false,
 }: {
   onClose: () => void;
   /** Render panel body only for the shared Settings shell. */
   embedded?: boolean;
+  localOwner?: boolean;
 }) {
   const { t } = useLingui();
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
@@ -304,6 +306,8 @@ export function ModelSettingsOverlay({
 
   const description = loading ? (
     <Trans>Loading model catalog…</Trans>
+  ) : localOwner ? (
+    <Trans>Models for the server owner’s default space.</Trans>
   ) : (
     <Trans>Choose which connected model Rakazo uses.</Trans>
   );
