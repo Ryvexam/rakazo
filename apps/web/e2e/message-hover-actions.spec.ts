@@ -1,9 +1,7 @@
-import { expect, type Route, test } from "@playwright/test";
+import { expect, type Locator, type Page, type Route, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
 
-async function revealHoverRail(
-  row: import("@playwright/test").Locator,
-): Promise<import("@playwright/test").Locator> {
+async function revealHoverRail(row: Locator): Promise<Locator> {
   const rail = row.getByTestId("message-hover-rail");
   await expect
     .poll(async () => {
@@ -20,10 +18,7 @@ async function revealHoverRail(
 }
 
 /** Park the pointer outside the message and blur focus so the rail returns to opacity-0. */
-async function expectRailAtRest(
-  page: import("@playwright/test").Page,
-  row: import("@playwright/test").Locator,
-) {
+async function expectRailAtRest(page: Page, row: Locator) {
   const rail = row.getByTestId("message-hover-rail");
   const box = await row.boundingBox();
   if (box) {
@@ -103,15 +98,15 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
   const toolbar = parentRow.getByTestId("message-hover-actions");
   await expect(toolbar.getByRole("button", { name: "Reply" })).toBeVisible();
   await expect(toolbar.getByRole("button", { name: "More" })).toBeVisible();
-  const thumbsUp = toolbar.getByRole("button", { name: "Add thumbs-up" });
-  await expect(thumbsUp).toBeVisible();
+  const react = toolbar.getByRole("button", { name: "React" });
+  await expect(react).toBeVisible();
   // Default reaction matches Reply/More: muted control color, not yellow.
   await expect
     .poll(async () => {
       const mutedColor = await toolbar
         .getByRole("button", { name: "More" })
         .evaluate((el) => getComputedStyle(el).color);
-      const reactionColor = await thumbsUp.evaluate((el) => getComputedStyle(el).color);
+      const reactionColor = await react.evaluate((el) => getComputedStyle(el).color);
       return reactionColor === mutedColor;
     })
     .toBe(true);
@@ -206,12 +201,25 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
   });
   await testInfo.attach("message-hover-toolbar", { contentType: "image/png", path: hoverPath });
 
-  await thumbsUp.click();
-  const reactionChip = parentRow
-    .getByRole("button", { name: "Remove thumbs-up" })
-    .filter({ hasText: "👍" });
-  await expect(reactionChip).toBeVisible();
-  await captureScreenshot(page, testInfo, "message-thumbs-up");
+  await react.click();
+  for (const emoji of ["👍", "👎", "❤️", "😂", "🎉", "😮"]) {
+    await expect(page.getByRole("button", { name: emoji, exact: true })).toBeVisible();
+  }
+  await captureScreenshot(page, testInfo, "message-reaction-picker");
+  await page.getByRole("button", { name: "❤️", exact: true }).click();
+  await expect(parentRow.getByTestId("message-reactions")).toHaveText("❤️");
+  await parentRow.hover();
+  await react.click();
+  await page.getByRole("button", { name: "👍", exact: true }).click();
+  await expect(parentRow.getByTestId("message-reactions")).toContainText("👍");
+  await parentRow.hover();
+  await react.click();
+  await page.getByRole("button", { name: "❤️", exact: true }).click();
+  await expect(parentRow.getByTestId("message-reactions")).toContainText("❤️ 2");
+  await captureScreenshot(page, testInfo, "message-multiple-reactions");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(parentRow.getByTestId("message-reactions")).toContainText("❤️ 2");
+  await expect(parentRow.getByTestId("message-reactions")).toContainText("👍");
 
   await parentRow.hover();
   await toolbar.getByRole("button", { name: "More" }).click();
@@ -348,6 +356,14 @@ test.describe("touch message actions", () => {
     const rail = row.getByTestId("message-hover-rail");
     await expect(rail).toHaveCSS("opacity", "1");
     await expect(rail.getByRole("button", { name: "Reply", exact: true })).toBeHidden();
+    await rail.getByRole("button", { name: "React", exact: true }).tap();
+    await expect(page.getByRole("button", { name: "🎉", exact: true })).toBeVisible();
+    await captureScreenshot(page, testInfo, "message-reaction-picker-touch");
+    await page.getByRole("button", { name: "🎉", exact: true }).tap();
+    await expect(row.getByTestId("message-reactions")).toHaveText("🎉");
+    await rail.getByRole("button", { name: "React", exact: true }).tap();
+    await page.getByRole("button", { name: "🎉", exact: true }).tap();
+    await expect(row.getByTestId("message-reactions")).toHaveText("🎉 2");
     await rail.getByRole("button", { name: "More" }).tap();
     await expect(page.getByRole("menuitem", { name: "Copy" })).toBeVisible();
     await expect(row.getByTestId("message-hover-time")).toHaveCSS("opacity", "1");
