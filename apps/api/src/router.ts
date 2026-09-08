@@ -133,6 +133,7 @@ import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
 import { createOwnedArtifact, getOwnedArtifact, getSpaceArtifact } from "./artifacts.js";
+import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
   resolveBusyBotName,
@@ -920,8 +921,14 @@ export function createRouter(deps: RouterDeps) {
             }
           }
         }
-        await deps.prisma.bot.update({
-          where: { id: input.botId },
+        if (!existing.thread) throw new IsolationError();
+        await commitBotUpdate({
+          prisma: deps.prisma,
+          notify: (threadId, seq) => deps.events.notify(threadId, seq),
+          spaceId: context.actor.spaceId,
+          threadId: existing.thread.id,
+          botId: input.botId,
+          emitBotUpdated: botProfileLabelsChanged(input),
           data: {
             name: input.name,
             title: input.title,
