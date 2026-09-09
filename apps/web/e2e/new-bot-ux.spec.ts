@@ -80,7 +80,7 @@ test("picker rows explain groups and spaces", async ({ page }, testInfo) => {
   const dialog = page.getByTestId("picker-info-dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Groups", { exact: true })).toBeVisible();
-  await expect(dialog).toContainText("shared thread");
+  await expect(dialog).toContainText("same thread");
   await expect(page.getByTestId("side-panel")).not.toHaveAttribute("data-panel", "create-group");
   await captureScreenshot(page, testInfo, "picker-group-info-dialog");
   await dialog.getByRole("button", { name: "Close" }).click();
@@ -94,7 +94,7 @@ test("picker rows explain groups and spaces", async ({ page }, testInfo) => {
   await spaceInfo.click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Spaces", { exact: true })).toBeVisible();
-  await expect(dialog).toContainText("private workspace");
+  await expect(dialog).toContainText("own bots and groups");
   await captureScreenshot(page, testInfo, "picker-space-info-dialog");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
