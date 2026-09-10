@@ -40,7 +40,7 @@ describe("sealed screen capabilities", () => {
       );
       const script = html
         .match(/<script type="module">([\s\S]*?)<\/script>/)![1]!
-        .replace(/^\s*import .*;$/gm, "");
+        .replace(/^\s*import[\s\S]*?;\s*$/gm, "");
       let socketUrl = "";
       runInNewContext(script, {
         document: { location: url, getElementById: () => ({}) },
@@ -51,6 +51,12 @@ describe("sealed screen capabilities", () => {
           }
         },
         attachHostClipboardPaste: () => {},
+        // Embed imports are stripped for this smoke; stub the touch-keyboard
+        // and trackpad bridges the same way as clipboard. Returning false
+        // skips Keyboard / KeyTable / keysyms, which this harness does not provide.
+        isTouchBrowser: () => false,
+        attachMobileKeyboard: () => {},
+        attachMobileTrackpad: () => {},
       });
       const socket = new URL(socketUrl);
       expect(socket.protocol).toBe("wss:");
