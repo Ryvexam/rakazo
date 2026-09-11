@@ -61,6 +61,7 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
 const TOOL_FINAL_RESPONSE_FALLBACK =
   "I completed the tool step but could not produce a final response. Please ask me to continue.";
+const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
 // reasoning (e.g. google/gemini-3.7-flash). Keep a real level when model.reasoning
@@ -233,7 +234,8 @@ export class PiAgentRuntime implements AgentRuntime {
           streamFn: (m, ctx, options) =>
             models.streamSimple(m, ctx, reliableStreamOptions(m, options)),
           getApiKey: async () => apiKey,
-          transformContext: async (messages) => pruneComputerScreenshotContext(messages),
+          transformContext: async (messages) =>
+            pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
             const steering = await request.claimSteering([...seenSteeringIds]);
@@ -523,6 +525,9 @@ export function modelsForRequest(
       modelId: request.model.id,
       baseUrl: request.model.baseUrl,
       reasoning: request.model.reasoning,
+      acceptsImages: request.model.acceptsImages,
+      maxTokens: request.model.maxTokens,
+      contextWindow: request.model.contextWindow,
     });
   }
   return catalogModels();
@@ -985,7 +990,8 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     streamFn: (m, ctx, options) =>
       selectedModel.models.streamSimple(m, ctx, reliableStreamOptions(m, options)),
     getApiKey: async () => selectedModel.apiKey,
-    transformContext: async (messages) => pruneComputerScreenshotContext(messages),
+    transformContext: async (messages) =>
+      pruneComputerScreenshotContext(messages, host.request.model.maxImagesPerPrompt),
     initialState: {
       systemPrompt: [
         `You are a Rakazo subagent named "${name}".`,
@@ -1188,18 +1194,38 @@ function builtinParameters(tool: ConnectorTool) {
   return undefined;
 }
 
-/** Keep recent visual state without repeatedly resending every earlier full screenshot. */
+/** Keep recent visual state while respecting an optional model image budget. */
 export function pruneComputerScreenshotContext(
   messages: AgentMessage[],
-  screenshotsToKeep = 2,
+  maxImagesPerPrompt?: number,
 ): AgentMessage[] {
-  let remaining = Math.max(0, screenshotsToKeep);
+  const imageLimit =
+    maxImagesPerPrompt === undefined
+      ? undefined
+      : Number.isFinite(maxImagesPerPrompt)
+        ? Math.max(0, Math.floor(maxImagesPerPrompt))
+        : DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP;
+  let remaining = imageLimit ?? DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP;
+  if (imageLimit !== undefined) {
+    const nonScreenshotImages = messages.reduce(
+      (count, message) =>
+        isComputerScreenshotMessage(message) ? count : count + imagePartCount(message),
+      0,
+    );
+    if (nonScreenshotImages > imageLimit) {
+      throw new Error(
+        `The configured model image limit is ${imageLimit}, but the prompt contains ${nonScreenshotImages} non-screenshot images.`,
+      );
+    }
+    remaining = imageLimit - nonScreenshotImages;
+  }
   let transformed: AgentMessage[] | undefined;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!isComputerScreenshotMessage(message)) continue;
-    if (remaining > 0) {
-      remaining -= 1;
+    const images = imagePartCount(message);
+    if (remaining >= images) {
+      remaining -= images;
       continue;
     }
     transformed ??= [...messages];
@@ -1209,6 +1235,14 @@ export function pruneComputerScreenshotContext(
     };
   }
   return transformed ?? messages;
+}
+
+function imagePartCount(message: AgentMessage): number {
+  if (!("content" in message) || !Array.isArray(message.content)) return 0;
+  return message.content.filter(
+    (part: unknown) =>
+      part !== null && typeof part === "object" && "type" in part && part.type === "image",
+  ).length;
 }
 
 function isComputerScreenshotMessage(
