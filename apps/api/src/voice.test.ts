@@ -11,18 +11,22 @@ import {
 
 describe("toVoiceStatus", () => {
   it("treats a saved key without a voice as configured but not ready", () => {
-    expect(toVoiceStatus({ provider: "elevenlabs", voiceId: "" })).toEqual({
+    expect(toVoiceStatus({ provider: "elevenlabs", voiceId: "", modelId: "" })).toEqual({
       configured: true,
       ready: false,
       transcribe: true,
       provider: "elevenlabs",
       voiceId: "",
+      modelId: "",
+      voiceLabel: null,
     });
   });
 
   it("is ready once a voice is chosen", () => {
-    expect(toVoiceStatus({ provider: "cartesia", voiceId: "katie" }).ready).toBe(true);
-    expect(toVoiceStatus({ provider: "cartesia", voiceId: "katie" }).transcribe).toBe(false);
+    expect(toVoiceStatus({ provider: "cartesia", voiceId: "katie", modelId: "" }).ready).toBe(true);
+    expect(toVoiceStatus({ provider: "cartesia", voiceId: "katie", modelId: "" }).transcribe).toBe(
+      false,
+    );
   });
 
   it("is off when nothing is connected", () => {
@@ -32,7 +36,26 @@ describe("toVoiceStatus", () => {
       transcribe: false,
       provider: null,
       voiceId: "",
+      modelId: "",
+      voiceLabel: null,
     });
+  });
+
+  it("uses the Fish Audio default for preferences created before model selection", () => {
+    expect(toVoiceStatus({ provider: "fish-audio", voiceId: "voice", modelId: "" }).modelId).toBe(
+      "s2.1-pro",
+    );
+  });
+
+  it("exposes a saved voice label without exposing any credential material", () => {
+    expect(
+      toVoiceStatus({
+        provider: "fish-audio",
+        voiceId: "voice-id",
+        modelId: "s2.1-pro",
+        voiceLabel: "French Narrator",
+      }),
+    ).toMatchObject({ voiceId: "voice-id", voiceLabel: "French Narrator" });
   });
 });
 

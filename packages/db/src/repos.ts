@@ -49,6 +49,9 @@ function mapBot(
     thread: { id: string; unread: boolean } | null;
     computer: { scope: string } | null;
     voiceId?: string | null;
+    voiceProvider?: string | null;
+    voiceModelId?: string | null;
+    voiceLabel?: string | null;
     autoSpeak?: boolean;
     modelProvider?: string | null;
     modelId?: string | null;
@@ -86,6 +89,9 @@ function mapBot(
     createdAt: bot.createdAt.toISOString(),
     updatedAt: bot.updatedAt.toISOString(),
     voiceId: bot.voiceId ?? null,
+    voiceProvider: bot.voiceProvider ?? null,
+    voiceModelId: bot.voiceModelId ?? null,
+    voiceLabel: bot.voiceLabel ?? null,
     autoSpeak: bot.autoSpeak ?? false,
     modelProvider: bot.modelProvider ?? null,
     modelId: bot.modelId ?? null,
@@ -349,6 +355,10 @@ export function createRepos(prisma: PrismaClient) {
         modelProvider?: string | null;
         modelId?: string | null;
         thinkingLevel?: string | null;
+        voiceId?: string | null;
+        voiceProvider?: string | null;
+        voiceModelId?: string | null;
+        voiceLabel?: string | null;
         initialMessage?: {
           role: "user" | "bot" | "system";
           blocks: MessageBlock[];
@@ -418,6 +428,10 @@ export function createRepos(prisma: PrismaClient) {
               modelProvider,
               modelId,
               thinkingLevel,
+              voiceId: input.voiceId ?? null,
+              voiceProvider: input.voiceProvider ?? null,
+              voiceModelId: input.voiceModelId ?? null,
+              voiceLabel: input.voiceLabel ?? null,
             },
           });
           const thread = await tx.thread.create({

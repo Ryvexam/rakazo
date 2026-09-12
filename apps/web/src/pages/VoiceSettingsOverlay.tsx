@@ -1,5 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { VoiceCatalogEntry, VoiceCredential, VoiceInfo, VoiceStatus } from "@rakazo/contracts";
+import type {
+  Bot,
+  VoiceCatalogEntry,
+  VoiceCredential,
+  VoiceInfo,
+  VoiceStatus,
+} from "@rakazo/contracts";
 import {
   Button,
   Dialog,
@@ -16,6 +22,16 @@ import { XIcon } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { rpc } from "../lib/rpc";
 
+type VoiceBot = Pick<Bot, "id" | "name" | "voiceId"> & {
+  /** Optional metadata returned by newer servers for an unavailable saved voice. */
+  voiceLabel?: string | null;
+};
+
+type VoiceCredentialWithLabel = VoiceCredential & {
+  /** Optional server-resolved display name for legacy selections. */
+  voiceLabel?: string | null;
+};
+
 export function VoiceSettingsOverlay({
   onClose,
   embedded = false,
@@ -29,15 +45,20 @@ export function VoiceSettingsOverlay({
   const { t } = useLingui();
   const apiKeyId = useId();
   const voiceSelectId = useId();
+  const modelSelectId = useId();
+  const botVoiceIdPrefix = useId();
   const [catalog, setCatalog] = useState<VoiceCatalogEntry[]>([]);
   const [credentials, setCredentials] = useState<VoiceCredential[]>([]);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
+  const [bots, setBots] = useState<VoiceBot[]>([]);
   const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [voiceId, setVoiceId] = useState("");
+  const [modelId, setModelId] = useState("");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<"connect" | "voice" | "test" | null>(null);
+  const [botVoicePending, setBotVoicePending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -58,14 +79,18 @@ export function VoiceSettingsOverlay({
       rpc.voice.credentials(),
       rpc.voice.status(),
     ]);
+    const nextBots = await rpc.bots.list().catch(() => []);
     const selected = nextProvider || provider || nextStatus.provider || nextCatalog[0]?.id || "";
     setCatalog(nextCatalog);
     setCredentials(nextCredentials);
     setStatus(nextStatus);
+    setBots(nextBots);
     setProvider(selected);
     const cred = nextCredentials.find((entry) => entry.provider === selected);
+    const catalogEntry = nextCatalog.find((entry) => entry.id === selected);
     const activeVoice = cred?.voiceId ?? "";
     setVoiceId(activeVoice);
+    setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
     if (cred) {
       const listed = await rpc.voice.voices({ provider: selected });
       setVoices(listed);
@@ -86,8 +111,20 @@ export function VoiceSettingsOverlay({
   const selected = catalog.find((entry) => entry.id === provider) ?? catalog[0];
   const credential = credentials.find((entry) => entry.provider === provider);
   const voiceOptions = useMemo(
-    () => (voices.length ? voices : voiceId ? [{ id: voiceId, label: voiceId }] : []),
-    [voices, voiceId],
+    () =>
+      voices.length
+        ? voices
+        : voiceId
+          ? [
+              {
+                id: voiceId,
+                label:
+                  (credential as VoiceCredentialWithLabel | undefined)?.voiceLabel ||
+                  t`Unavailable voice`,
+              },
+            ]
+          : [],
+    [credential, t, voices, voiceId],
   );
 
   async function connectKey() {
@@ -100,6 +137,7 @@ export function VoiceSettingsOverlay({
         provider: selected.id,
         apiKey: apiKey.trim(),
         voiceId: voiceId || undefined,
+        modelId: modelId || undefined,
       });
       setApiKey("");
       await refresh(selected.id);
@@ -117,12 +155,58 @@ export function VoiceSettingsOverlay({
     markPending("voice");
     setError(null);
     try {
-      await rpc.voice.setVoice({ voiceId: nextVoiceId, provider: selected?.id });
+      await rpc.voice.setVoice({
+        voiceId: nextVoiceId,
+        modelId: modelId || undefined,
+        provider: selected?.id,
+      });
       await refresh(selected?.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not save that voice`);
     } finally {
       markPending(null);
+    }
+  }
+
+  /** Persist the provider model alongside the current voice selection. */
+  async function chooseModel(nextModelId: string) {
+    setModelId(nextModelId);
+    if (!credential || !voiceId) return;
+    markPending("voice");
+    setError(null);
+    try {
+      await rpc.voice.setVoice({
+        voiceId,
+        modelId: nextModelId,
+        provider: selected?.id,
+      });
+      await refresh(selected?.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t`Could not save that model`);
+    } finally {
+      markPending(null);
+    }
+  }
+
+  async function chooseBotVoice(botId: string, nextVoiceId: string) {
+    if (botVoicePending) return;
+    setBotVoicePending(botId);
+    setError(null);
+    try {
+      const updated = await rpc.bots.update({
+        botId,
+        // An empty selection explicitly restores the space/account voice.
+        voiceId: nextVoiceId || null,
+        voiceProvider: nextVoiceId ? (selected?.id ?? null) : null,
+        voiceModelId: nextVoiceId ? null : null,
+      });
+      setBots((current) =>
+        current.map((bot) => (bot.id === updated.id ? { ...bot, ...updated } : bot)),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t`Could not save that bot voice`);
+    } finally {
+      setBotVoicePending(null);
     }
   }
 
@@ -231,6 +315,26 @@ export function VoiceSettingsOverlay({
                   placeholder={credential ? t`Paste a replacement key` : t`Paste your API key`}
                 />
               </Field>
+              {selected.synthesisModels?.length ? (
+                <Field className="mt-4">
+                  <FieldLabel htmlFor={modelSelectId}>
+                    <Trans>Model</Trans>
+                  </FieldLabel>
+                  <NativeSelect
+                    id={modelSelectId}
+                    className="w-full"
+                    value={modelId}
+                    onChange={(event) => void chooseModel(event.target.value)}
+                  >
+                    {selected.synthesisModels.map((model) => (
+                      <NativeSelectOption key={model.id} value={model.id}>
+                        {model.label}
+                        {model.description ? ` · ${model.description}` : ""}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              ) : null}
               <Button
                 type="button"
                 className="mt-3"
@@ -275,6 +379,56 @@ export function VoiceSettingsOverlay({
                   >
                     {pending === "test" ? <Trans>Playing…</Trans> : <Trans>Hear a sample</Trans>}
                   </Button>
+                  <section data-testid="fish-bot-voices" className="mt-6">
+                    <h3 className="text-[14px] text-muted-foreground">
+                      <Trans>Bot voices</Trans>
+                    </h3>
+                    <div className="mt-2 divide-y divide-border rounded-xl border border-border">
+                      {bots.map((bot) => {
+                        const selectedVoice = bot.voiceId ?? "";
+                        const selectedVoiceInfo = voiceOptions.find(
+                          (voice) => voice.id === selectedVoice,
+                        );
+                        const botVoiceOptions =
+                          selectedVoice && !selectedVoiceInfo
+                            ? [
+                                {
+                                  id: selectedVoice,
+                                  label: bot.voiceLabel || t`Unavailable voice`,
+                                },
+                                ...voiceOptions,
+                              ]
+                            : voiceOptions;
+                        return (
+                          <label
+                            key={bot.id}
+                            htmlFor={`${botVoiceIdPrefix}-bot-${bot.id}`}
+                            className="flex items-center gap-3 px-3.5 py-3 text-[14px]"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-foreground">
+                              {bot.name}
+                            </span>
+                            <NativeSelect
+                              id={`${botVoiceIdPrefix}-bot-${bot.id}`}
+                              className="w-[min(240px,55%)]"
+                              value={selectedVoice}
+                              disabled={botVoicePending !== null || !botVoiceOptions.length}
+                              onChange={(event) => void chooseBotVoice(bot.id, event.target.value)}
+                            >
+                              <NativeSelectOption value="">
+                                <Trans>Account default</Trans>
+                              </NativeSelectOption>
+                              {botVoiceOptions.map((voice) => (
+                                <NativeSelectOption key={voice.id} value={voice.id}>
+                                  {voice.label}
+                                </NativeSelectOption>
+                              ))}
+                            </NativeSelect>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
                 </>
               ) : null}
             </>

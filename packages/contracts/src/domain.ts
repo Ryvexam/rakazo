@@ -61,6 +61,9 @@ export const BotSchema = z.object({
   updatedAt: z.string(),
   createdAt: z.string(),
   voiceId: z.string().nullable(),
+  voiceProvider: z.string().nullable(),
+  voiceModelId: z.string().nullable(),
+  voiceLabel: z.string().nullable(),
   autoSpeak: z.boolean(),
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
@@ -314,6 +317,8 @@ export const UpdateBotInput = z
     memoryScope: MemoryScopeSchema.nullable().optional(),
     sectionId: Id.nullable().optional(),
     voiceId: z.string().max(120).nullable().optional(),
+    voiceProvider: z.string().trim().min(1).max(80).nullable().optional(),
+    voiceModelId: z.string().trim().min(1).max(120).nullable().optional(),
     autoSpeak: z.boolean().optional(),
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
@@ -322,6 +327,24 @@ export const UpdateBotInput = z
     teamChatRules: z.string().max(TEAM_CHAT_RULES_MAX_LENGTH).optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.voiceProvider === null && value.voiceId !== undefined && value.voiceId !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A cleared voice provider cannot be combined with a voice id",
+        path: ["voiceId"],
+      });
+    }
+    if (
+      value.voiceId === null &&
+      value.voiceProvider !== undefined &&
+      value.voiceProvider !== null
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A voice id is required when a voice provider is set",
+        path: ["voiceId"],
+      });
+    }
     const providerProvided = value.modelProvider !== undefined;
     const modelProvided = value.modelId !== undefined;
     if (!providerProvided && !modelProvided) return;
@@ -1025,6 +1048,16 @@ export const VoiceCatalogEntrySchema = z.object({
   name: z.string(),
   description: z.string(),
   transcribe: z.boolean(),
+  synthesisModels: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional(),
+  defaultSynthesisModelId: z.string().optional(),
 });
 export type VoiceCatalogEntry = z.infer<typeof VoiceCatalogEntrySchema>;
 
@@ -1041,6 +1074,8 @@ export const VoiceCredentialSchema = z.object({
   hasKey: z.boolean(),
   isDefault: z.boolean(),
   voiceId: z.string(),
+  modelId: z.string(),
+  voiceLabel: z.string().nullable().optional(),
   transcribe: z.boolean(),
 });
 export type VoiceCredential = z.infer<typeof VoiceCredentialSchema>;
@@ -1051,6 +1086,8 @@ export const VoiceStatusSchema = z.object({
   transcribe: z.boolean(),
   provider: z.string().nullable(),
   voiceId: z.string(),
+  modelId: z.string(),
+  voiceLabel: z.string().nullable().optional(),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
 

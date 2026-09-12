@@ -1,7 +1,12 @@
 import type { VoiceProvider } from "@rakazo/adapter-kit";
+import type { VoiceCatalogEntry } from "@rakazo/contracts";
 import { CartesiaVoiceProvider } from "./cartesia-voice.js";
 import { ElevenLabsVoiceProvider } from "./elevenlabs-voice.js";
-import { FishAudioVoiceProvider } from "./fish-audio-voice.js";
+import {
+  FISH_AUDIO_DEFAULT_TTS_MODEL,
+  FISH_AUDIO_TTS_MODELS,
+  FishAudioVoiceProvider,
+} from "./fish-audio-voice.js";
 import { OpenAIVoiceProvider } from "./openai-voice.js";
 import { SCRIPTED_VOICE_CATALOG_ENTRY, ScriptedVoiceProvider } from "./scripted-voice.js";
 
@@ -29,8 +34,12 @@ export const VOICE_CATALOG = [
     name: "Fish Audio",
     description: "Voice models, cloning, and expressive speech with optional transcription.",
     transcribe: true,
+    // Return a mutable catalog array because the shared RPC schema exposes a
+    // regular array while the adapter's static model list is readonly.
+    synthesisModels: [...FISH_AUDIO_TTS_MODELS],
+    defaultSynthesisModelId: FISH_AUDIO_DEFAULT_TTS_MODEL,
   },
-] as const;
+] satisfies readonly VoiceCatalogEntry[];
 
 export { SCRIPTED_VOICE_CATALOG_ENTRY };
 
@@ -47,9 +56,9 @@ export function listVoiceCatalog() {
     : [...VOICE_CATALOG];
 }
 
-export function voiceCatalogEntry(id: string) {
+export function voiceCatalogEntry(id: string): VoiceCatalogEntry | undefined {
   if (id === SCRIPTED_VOICE_CATALOG_ENTRY.id) return SCRIPTED_VOICE_CATALOG_ENTRY;
-  return VOICE_CATALOG.find((entry) => entry.id === id);
+  return VOICE_CATALOG.find((entry) => entry.id === id) as VoiceCatalogEntry | undefined;
 }
 
 export function isVoiceProviderId(value: string): value is VoiceProviderId {

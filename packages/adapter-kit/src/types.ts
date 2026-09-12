@@ -454,6 +454,33 @@ export interface VoiceInfo {
   id: string;
   label: string;
   description?: string;
+  /** Whether the model is public or owned by the authenticated provider account. */
+  scope?: VoiceCatalogScope;
+  /** Languages advertised by the provider for this voice model. */
+  languages?: string[];
+  /** Provider author metadata, when available. */
+  author?: { id?: string; name?: string };
+  /** Whether the provider marks this model as licensed. */
+  licensed?: boolean;
+}
+
+export type VoiceCatalogScope = "public" | "owned";
+
+/** Bounded provider-neutral query for a voice catalog page. */
+export interface VoiceCatalogQuery {
+  scope: VoiceCatalogScope;
+  query?: string;
+  language?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** One page of provider voices; providers must not crawl an entire catalog. */
+export interface VoiceCatalogPage {
+  items: VoiceInfo[];
+  nextPage?: number;
+  /** The provider has stopped exposing more results in its current accessible window. */
+  windowLimited?: boolean;
 }
 
 export interface SpeechClip {
@@ -475,6 +502,7 @@ export interface VoiceVerifyResult {
 export interface VoiceSynthesizeRequest {
   text: string;
   voiceId: string;
+  modelId?: string;
   apiKey: string;
   signal?: AbortSignal;
 }

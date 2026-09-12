@@ -8,7 +8,6 @@ import type {
   ModelCatalogEntry,
   ModelCredential,
   ThinkingLevel,
-  VoiceInfo,
 } from "@rakazo/contracts";
 import {
   BOT_COLORS,
@@ -207,7 +206,6 @@ export function BotSettings({
     computerMode: ComputerMode;
     memoryScope?: "isolated" | "shared" | null;
     autoSpeak?: boolean;
-    voiceId?: string | null;
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: ThinkingLevel | null;
@@ -225,8 +223,6 @@ export function BotSettings({
   const [computerMode, setComputerMode] = useState(bot.computerMode);
   const [memoryScope, setMemoryScope] = useState(bot.memoryScope);
   const [autoSpeak, setAutoSpeak] = useState(bot.autoSpeak);
-  const [voiceId, setVoiceId] = useState(bot.voiceId ?? "");
-  const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [modelKey, setModelKey] = useState(
     bot.modelProvider && bot.modelId ? modelOptionKey(bot.modelProvider, bot.modelId) : "",
   );
@@ -238,10 +234,6 @@ export function BotSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    void rpc.voice
-      .voices({})
-      .then(setVoices)
-      .catch(() => setVoices([]));
     void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
       .then(([nextCredentials, nextCatalog, nextMe]) => {
         setCredentials(nextCredentials);
@@ -480,24 +472,6 @@ export function BotSettings({
           />
           <Trans>Read replies aloud</Trans>
         </label>
-        {voices.length ? (
-          <label htmlFor={`${ids}-voice`} className={fieldLabelClass}>
-            <Trans>Voice</Trans>
-            <NativeSelect
-              id={`${ids}-voice`}
-              className="mt-2 w-full"
-              value={voiceId}
-              onChange={(event) => setVoiceId(event.target.value)}
-            >
-              <NativeSelectOption value="">{t`Account default`}</NativeSelectOption>
-              {voices.map((voice) => (
-                <NativeSelectOption key={voice.id} value={voice.id}>
-                  {voice.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </label>
-        ) : null}
       </details>
       {error ? <p className="mt-2 text-[13px] text-destructive">{error}</p> : null}
       <div className="mt-5 flex flex-col items-start gap-3">
@@ -522,7 +496,6 @@ export function BotSettings({
               computerMode,
               memoryScope,
               autoSpeak,
-              voiceId: voiceId || null,
               modelProvider: selected?.provider ?? null,
               modelId: selected?.modelId ?? null,
               // Only clear thinking when catalog metadata is available; otherwise

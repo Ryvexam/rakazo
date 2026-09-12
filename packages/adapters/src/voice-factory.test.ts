@@ -53,6 +53,13 @@ describe("createVoiceProvider", () => {
     expect(createVoiceProvider("openai").describe().capabilities.transcribe).toBe(true);
     expect(createVoiceProvider("cartesia").describe().capabilities.transcribe).toBe(false);
     expect(createVoiceProvider("fish-audio").describe().capabilities.transcribe).toBe(true);
+    expect(VOICE_CATALOG.find((entry) => entry.id === "fish-audio")).toMatchObject({
+      defaultSynthesisModelId: "s2.1-pro",
+      synthesisModels: expect.arrayContaining([
+        expect.objectContaining({ id: "s2.1-pro" }),
+        expect.objectContaining({ id: "s2.1-pro-free" }),
+      ]),
+    });
     expect(isVoiceProviderId("elevenlabs")).toBe(true);
     expect(isVoiceProviderId("scripted")).toBe(false);
     expect(isVoiceProviderId("piper")).toBe(false);
@@ -202,8 +209,17 @@ describe("FishAudioVoiceProvider", () => {
     const voices = await new FishAudioVoiceProvider().listVoices("sk-test", ctx);
 
     expect(voices).toEqual([
-      { id: "private-id", label: "Private Voice", description: "My clone" },
-      { id: "public-id", label: "Duplicate" },
+      {
+        id: "private-id",
+        label: "Private Voice",
+        description: "My clone",
+        scope: "owned",
+      },
+      {
+        id: "public-id",
+        label: "Duplicate",
+        scope: "owned",
+      },
     ]);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("page_size=100");
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("self=true");
@@ -310,6 +326,170 @@ describe("FishAudioVoiceProvider", () => {
     ).toHaveLength(publicPages);
   });
 
+  it("searches one bounded page with Fish-side title and language filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          total: 101,
+          has_more: true,
+          window_limited: false,
+          items: [
+            {
+              _id: "voice-fr",
+              title: "French Narrator",
+              description: "A warm voice",
+              languages: ["fr"],
+              author: { _id: "author-1", nickname: "Voice Studio" },
+              licensed: true,
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "public", query: " french ", language: "fr", page: 2, pageSize: 100 },
+      ctx,
+    );
+
+    expect(result).toEqual({
+      items: [
+        {
+          id: "voice-fr",
+          label: "French Narrator",
+          description: "A warm voice · fr",
+          scope: "public",
+          languages: ["fr"],
+          author: { id: "author-1", name: "Voice Studio" },
+          licensed: true,
+        },
+      ],
+      nextPage: 3,
+      windowLimited: false,
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.searchParams.get("self")).toBe("false");
+    expect(url.searchParams.get("title")).toBe("french");
+    expect(url.searchParams.get("language")).toBe("fr");
+    expect(url.searchParams.get("page_number")).toBe("2");
+    expect(url.searchParams.get("page_size")).toBe("50");
+  });
+
+  it("stops at Fish's accessible window while reporting that results are limited", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          total: 1_000_000,
+          has_more: true,
+          window_limited: true,
+          accessible_upper_bound: 60,
+          items: Array.from({ length: 30 }, (_, index) => ({
+            _id: `voice-${index + 1}`,
+            title: `Voice ${index + 1}`,
+          })),
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "owned", page: 2, pageSize: 30 },
+      ctx,
+    );
+
+    expect(result.nextPage).toBeUndefined();
+    expect(result.windowLimited).toBe(true);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("self=true");
+  });
+
+  it("keeps the next page while a window still has accessible results", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            total: 1_000_000,
+            has_more: true,
+            window_limited: true,
+            accessible_upper_bound: 60,
+            items: [{ _id: "voice-1", title: "Voice 1" }],
+          }),
+        ),
+      ),
+    );
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "public", page: 1, pageSize: 30 },
+      ctx,
+    );
+
+    expect(result.nextPage).toBe(2);
+    expect(result.windowLimited).toBe(true);
+  });
+
+  it("ends pagination on an empty page even when Fish reports has_more", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ total: 1_000_000, has_more: true, items: [] })),
+        ),
+    );
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "public", page: 1, pageSize: 30 },
+      ctx,
+    );
+
+    expect(result.items).toEqual([]);
+    expect(result.nextPage).toBeUndefined();
+  });
+
+  it("resolves a selected voice by ID with display metadata", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          _id: "selected-id",
+          title: "My French Clone",
+          description: "Used by the support bot",
+          visibility: "private",
+          languages: ["fr", "en"],
+          author: { _id: "me", nickname: "Maxime" },
+          licensed: false,
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      new FishAudioVoiceProvider().getVoice!("sk-test", "selected-id", ctx),
+    ).resolves.toEqual({
+      id: "selected-id",
+      label: "My French Clone",
+      description: "Used by the support bot · fr, en",
+      languages: ["fr", "en"],
+      author: { id: "me", name: "Maxime" },
+      licensed: false,
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://api.fish.audio/model/selected-id");
+  });
+
+  it("returns null for an inaccessible selected voice", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("not found", { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      new FishAudioVoiceProvider().getVoice!("sk-test", "missing-id", ctx),
+    ).resolves.toBe(null);
+  });
+
   it("synthesizes with the Fish Audio TTS contract", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -332,6 +512,43 @@ describe("FishAudioVoiceProvider", () => {
       reference_id: "voice-id",
       format: "mp3",
     });
+  });
+
+  it("uses the selected Fish Audio TTS model", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([7, 8]).buffer,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new FishAudioVoiceProvider().synthesize(
+      {
+        text: "Hi",
+        voiceId: "voice-id",
+        modelId: "s2.1-pro-free",
+        apiKey: "sk-test",
+      },
+      ctx,
+    );
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>).model).toBe("s2.1-pro-free");
+  });
+
+  it("rejects unknown Fish Audio TTS model ids before making a request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([7, 8]).buffer,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      new FishAudioVoiceProvider().synthesize(
+        { text: "Hi", voiceId: "voice-id", modelId: "unknown", apiKey: "sk-test" },
+        ctx,
+      ),
+    ).rejects.toThrow('Unknown Fish Audio TTS model "unknown".');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("transcribes through Fish Audio ASR", async () => {

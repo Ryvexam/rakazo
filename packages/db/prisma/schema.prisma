@@ -307,6 +307,8 @@ model SpaceVoicePreference {
   credentialId String
   credential   UserVoiceCredential @relation(fields: [credentialId, userId], references: [id, userId], onDelete: Cascade)
   voiceId      String              @default("")
+  modelId      String              @default("")
+  voiceLabel   String?
   isDefault    Boolean             @default(false)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -347,6 +349,9 @@ model Bot {
   computer          Computer?         @relation(fields: [computerId], references: [id], onDelete: SetNull)
   computerSwitching Boolean           @default(false)
   voiceId           String?
+  voiceProvider     String?
+  voiceModelId      String?
+  voiceLabel        String?
   autoSpeak         Boolean           @default(false)
   modelProvider     String?
   modelId           String?

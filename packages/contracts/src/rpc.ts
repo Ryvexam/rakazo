@@ -732,11 +732,18 @@ export const appContract = {
           provider: z.string(),
           apiKey: z.string().min(8),
           voiceId: z.string().max(120).optional(),
+          modelId: z.string().max(120).optional(),
         }),
       )
       .output(VoiceCredentialSchema),
     setVoice: oc
-      .input(z.object({ voiceId: z.string().min(1).max(120), provider: z.string().optional() }))
+      .input(
+        z.object({
+          voiceId: z.string().min(1).max(120),
+          modelId: z.string().max(120).optional(),
+          provider: z.string().optional(),
+        }),
+      )
       .output(VoiceStatusSchema),
     voices: oc
       .input(z.object({ provider: z.string().optional() }))
