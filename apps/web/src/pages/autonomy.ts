@@ -32,6 +32,20 @@ export const DEFAULT_AUTONOMY_LIMITS: AutonomyLimits = {
   maxChainDepth: 3,
 };
 
+const INTERNAL_NOTE_MARKERS = new Set([
+  OPPORTUNITY_MARKER,
+  AUTONOMOUS_GOAL_MARKER,
+  USER_PROMOTED_GOAL_MARKER,
+]);
+const INTERNAL_NOTE_KEYS = [
+  "sourceGoalId=",
+  "sourceIdeaId=",
+  "depth=",
+  "value=",
+  "effort=",
+  "confidence=",
+];
+
 export function autonomyCron(minutes: HeartbeatMinutes): string {
   if (minutes === 60) return "0 * * * *";
   if (minutes === 120) return "0 */2 * * *";
@@ -104,12 +118,17 @@ export function parseOpportunityMetadata(notes: string): OpportunityMetadata | n
   };
 }
 
-export function opportunityRationale(notes: string): string {
-  const markerIndex = notes.indexOf(OPPORTUNITY_MARKER);
-  if (markerIndex < 0) return notes.trim();
-  const afterMarker = notes.slice(markerIndex + OPPORTUNITY_MARKER.length);
-  const rationaleStart = afterMarker.indexOf("\n\n");
-  return rationaleStart < 0 ? "" : afterMarker.slice(rationaleStart + 2).trim();
+export function visibleWorkNotes(notes: string): string {
+  return notes
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (INTERNAL_NOTE_MARKERS.has(trimmed)) return false;
+      return !INTERNAL_NOTE_KEYS.some((key) => trimmed.startsWith(key));
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function buildUserPromotedGoalNotes(itemId: string, notes: string): string {
