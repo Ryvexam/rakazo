@@ -1,12 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { Routine, ScratchpadItem } from "@rakazo/contracts";
-import {
-  Button,
-  Checkbox,
-  Input,
-  NativeSelect,
-  NativeSelectOption,
-} from "@rakazo/ui-web";
+import { Button, Checkbox, Input, NativeSelect, NativeSelectOption } from "@rakazo/ui-web";
 import { ChevronLeft, FileText, Folder, Lightbulb, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -16,10 +10,10 @@ import {
   type AutonomyMode,
   autonomyCron,
   buildAutonomyPrompt,
+  goalTitle,
+  HEARTBEAT_OPTIONS,
   type HeartbeatMinutes,
   heartbeatFromCrons,
-  HEARTBEAT_OPTIONS,
-  goalTitle,
   isAutonomyPrompt,
   isIdeaTitle,
   parseAutonomyMode,
@@ -77,6 +71,17 @@ export function ScratchpadSection({ botId }: { botId: string }) {
   const goals = useMemo(() => items.filter((item) => !isIdeaTitle(item.title)), [items]);
   const ideas = useMemo(() => items.filter((item) => isIdeaTitle(item.title)), [items]);
 
+  function applyAutonomyRoutine(routine: AutonomyRoutineState | null) {
+    setAutonomyRoutine(routine);
+    if (routine) {
+      setHeartbeatMinutes(heartbeatFromCrons(routine.crons));
+      setAutonomyMode(routine.active ? parseAutonomyMode(routine.prompt) : "off");
+      return;
+    }
+    setAutonomyMode("off");
+    setHeartbeatMinutes(30);
+  }
+
   async function refresh() {
     const generation = ++listGeneration.current;
     const [list, routines] = await Promise.all([
@@ -85,16 +90,7 @@ export function ScratchpadSection({ botId }: { botId: string }) {
     ]);
     if (generation !== listGeneration.current) return;
     setItems(list);
-
-    const routine = routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null;
-    setAutonomyRoutine(routine);
-    if (routine) {
-      setHeartbeatMinutes(heartbeatFromCrons(routine.crons));
-      setAutonomyMode(routine.active ? parseAutonomyMode(routine.prompt) : "off");
-    } else {
-      setAutonomyMode("off");
-      setHeartbeatMinutes(30);
-    }
+    applyAutonomyRoutine(routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null);
   }
 
   useEffect(() => {
@@ -103,20 +99,12 @@ export function ScratchpadSection({ botId }: { botId: string }) {
       .then(([list, routines]) => {
         if (generation !== listGeneration.current) return;
         setItems(list);
-        const routine = routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null;
-        setAutonomyRoutine(routine);
-        if (routine) {
-          setHeartbeatMinutes(heartbeatFromCrons(routine.crons));
-          setAutonomyMode(routine.active ? parseAutonomyMode(routine.prompt) : "off");
-        } else {
-          setAutonomyMode("off");
-          setHeartbeatMinutes(30);
-        }
+        applyAutonomyRoutine(routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null);
       })
       .catch(() => {
         if (generation !== listGeneration.current) return;
         setItems([]);
-        setAutonomyRoutine(null);
+        applyAutonomyRoutine(null);
       });
     return () => {
       listGeneration.current += 1;
@@ -181,9 +169,13 @@ export function ScratchpadSection({ botId }: { botId: string }) {
         itemId: item.id,
         title: goalTitle(item.title),
         status: "open",
-        notes: [item.notes.trim(), "Promoted from product discovery."].filter(Boolean).join("\n\n"),
+        notes: [item.notes.trim(), "Promoted from product discovery."]
+          .filter(Boolean)
+          .join("\n\n"),
       });
-      setItems((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setItems((current) =>
+        current.map((entry) => (entry.id === updated.id ? updated : entry)),
+      );
     } catch {
       setError(t`Could not update`);
     } finally {
@@ -238,7 +230,7 @@ export function ScratchpadSection({ botId }: { botId: string }) {
   }
 
   async function runAutonomyNow() {
-    if (!autonomyRoutine || !autonomyRoutine.active || busy) return;
+    if (!autonomyRoutine?.active || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -314,13 +306,20 @@ export function ScratchpadSection({ botId }: { botId: string }) {
             />
             <div className="min-w-0 flex-1">
               <div
-                className={`text-start text-[14.5px] ${item.status === "done" ? "text-muted-foreground/80 line-through" : "text-foreground"}`}
+                className={`text-start text-[14.5px] ${
+                  item.status === "done"
+                    ? "text-muted-foreground/80 line-through"
+                    : "text-foreground"
+                }`}
                 dir="auto"
               >
                 {item.title}
               </div>
               {item.notes ? (
-                <div className="mt-0.5 whitespace-pre-wrap text-[12.5px] text-muted-foreground/80" dir="auto">
+                <div
+                  className="mt-0.5 whitespace-pre-wrap text-[12.5px] text-muted-foreground/80"
+                  dir="auto"
+                >
                   {item.notes}
                 </div>
               ) : null}
@@ -401,7 +400,10 @@ export function ScratchpadSection({ botId }: { botId: string }) {
                     {goalTitle(item.title)}
                   </div>
                   {item.notes ? (
-                    <div className="mt-0.5 whitespace-pre-wrap text-[12.5px] text-muted-foreground/80" dir="auto">
+                    <div
+                      className="mt-0.5 whitespace-pre-wrap text-[12.5px] text-muted-foreground/80"
+                      dir="auto"
+                    >
                       {item.notes}
                     </div>
                   ) : null}
@@ -449,7 +451,9 @@ export function ScratchpadSection({ botId }: { botId: string }) {
             aria-label={t`Heartbeat`}
             value={String(heartbeatMinutes)}
             disabled={autonomyMode === "off"}
-            onChange={(event) => setHeartbeatMinutes(Number(event.target.value) as HeartbeatMinutes)}
+            onChange={(event) =>
+              setHeartbeatMinutes(Number(event.target.value) as HeartbeatMinutes)
+            }
           >
             {HEARTBEAT_OPTIONS.map((minutes) => (
               <NativeSelectOption key={minutes} value={String(minutes)}>
@@ -465,11 +469,21 @@ export function ScratchpadSection({ botId }: { botId: string }) {
           </div>
         ) : null}
         <div className="mt-3 flex gap-2">
-          <Button variant="secondary" size="sm" disabled={busy} onClick={() => void saveAutonomy()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() => void saveAutonomy()}
+          >
             <Trans>Save</Trans>
           </Button>
           {autonomyRoutine?.active ? (
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void runAutonomyNow()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => void runAutonomyNow()}
+            >
               <Play size={14} />
               <Trans>Run now</Trans>
             </Button>
