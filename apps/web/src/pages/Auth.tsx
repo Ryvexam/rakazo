@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { readBoundedJsonResponse, signupRequiresEmailVerification } from "@ryvoko/core";
-import { Button, Input, Label } from "@ryvoko/ui-web";
+import { Alert, Button, Input, Label, Wordmark } from "@ryvoko/ui-web";
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -200,9 +200,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             </div>
           ) : null}
           {error ? (
-            <p role="alert" className="mt-3 w-full text-sm text-destructive">
+            <Alert variant="destructive" className="mt-3 w-full py-2 text-sm">
               {error}
-            </p>
+            </Alert>
           ) : null}
           <Button type="submit" size="lg" disabled={pending} className={submitClass}>
             {pending ? (
@@ -304,9 +304,9 @@ export function PasswordResetPage() {
             className="mt-4"
           />
           {error ? (
-            <p role="alert" className="mt-3 w-full text-sm text-destructive">
+            <Alert variant="destructive" className="mt-3 w-full py-2 text-sm">
               {error}
-            </p>
+            </Alert>
           ) : null}
           <Button
             type="submit"
@@ -337,10 +337,7 @@ function AuthFrame({
   return (
     <div className="flex min-h-full items-center justify-center bg-background px-6 py-16 text-foreground">
       <form onSubmit={onSubmit} className="flex w-[460px] flex-col items-center">
-        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-muted">
-          <span className="h-5 w-[9px] rounded-full bg-primary" />
-          <span className="h-5 w-[9px] rounded-full bg-primary" />
-        </div>
+        <Wordmark />
         <h1 aria-live="polite" className="mb-9 mt-7 text-4xl font-medium tracking-tight">
           {title}
         </h1>

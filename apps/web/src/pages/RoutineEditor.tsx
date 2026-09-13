@@ -20,6 +20,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Input,
+  Switch,
   Textarea,
 } from "@ryvoko/ui-web";
 import { ChevronLeft, Clock, GitBranch, Globe, MessageSquare, Pause, Plus, X } from "lucide-react";
@@ -276,26 +277,14 @@ export function RoutineEditor({
       </div>
 
       <div className="mb-5 flex items-center justify-between gap-3">
-        <label className="flex items-center gap-2.5 text-sm text-foreground/75">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={draft.active}
-            onClick={() => onChange({ ...draft, active: !draft.active })}
-            className={`relative h-[22px] w-[40px] rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-              draft.active ? "bg-primary" : "bg-input"
-            }`}
-          >
-            <span
-              className={`absolute top-[2px] left-0 h-[18px] w-[18px] rounded-full bg-background transition-transform ${
-                draft.active
-                  ? "translate-x-[20px] dark:bg-primary-foreground"
-                  : "translate-x-[2px] dark:bg-foreground"
-              }`}
-            />
-          </button>
+        <div className="flex items-center gap-2.5 text-sm text-foreground/75">
+          <Switch
+            checked={draft.active}
+            onCheckedChange={(active) => onChange({ ...draft, active })}
+            aria-label={t`Active`}
+          />
           <Trans>Active</Trans>
-        </label>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" disabled={saving || running} onClick={onDelete}>
             <Trans>Delete</Trans>

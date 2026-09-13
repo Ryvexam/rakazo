@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { COMPUTER_UPDATE_STAGES, type ComputerUpdate } from "@ryvoko/contracts";
 import { computerUpdateNeedsAttention, computerUpdateStages } from "@ryvoko/core";
 import {
+  Alert,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -152,10 +153,7 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
               </ol>
             ) : null}
             {computerUpdateNeedsAttention(selected) ? (
-              <p
-                role="alert"
-                className="mx-6 my-6 rounded-xl bg-muted px-4 py-4 text-sm text-muted-foreground"
-              >
+              <Alert className="mx-6 my-6 border-border bg-muted px-4 py-4 text-sm text-muted-foreground">
                 {selected.status === "interrupted" ? (
                   <Trans>Recovery is unavailable until the previous operation has stopped.</Trans>
                 ) : (
@@ -163,16 +161,16 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
                     Recovery restores the last saved workspace. Unsaved work may be lost.
                   </Trans>
                 )}
-              </p>
+              </Alert>
             ) : (
               <span role="status" className="sr-only">
                 {labels[COMPUTER_UPDATE_STAGES.indexOf(selected.stage)]}
               </span>
             )}
             {error ? (
-              <p role="alert" className="px-6 pb-3 text-sm text-destructive">
+              <Alert variant="destructive" className="mx-6 mb-3 px-4 py-2 text-sm">
                 <Trans>Could not complete action</Trans>
-              </p>
+              </Alert>
             ) : null}
             <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
               {selected.status === "interrupted" && selected.canReleaseReservation ? (

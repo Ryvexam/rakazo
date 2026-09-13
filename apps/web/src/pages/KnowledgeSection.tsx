@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { AgentSkill, AgentSkillCatalogEntry, MemoryDocument } from "@ryvoko/contracts";
 import {
+  Alert,
   Button,
   Skeleton,
   Tabs,
@@ -11,6 +12,7 @@ import {
 } from "@ryvoko/ui-web";
 import { useEffect, useRef, useState } from "react";
 import { downloadArtifactBytes } from "../lib/artifact-open";
+import { runUiTask } from "../lib/effect";
 import { rpc } from "../lib/rpc";
 
 const fieldClass = "mt-2 w-full font-mono text-[13px] leading-relaxed";
@@ -96,8 +98,7 @@ function MemoryDocumentList({
 
   useEffect(() => {
     const current = ++generation.current;
-    void loadRef
-      .current()
+    void runUiTask("knowledge.load", () => loadRef.current())
       .then((list) => {
         if (current !== generation.current) return;
         setDocs(list);
@@ -125,7 +126,9 @@ function MemoryDocumentList({
     setBusy(true);
     setError(null);
     try {
-      const updated = await rpc.memory.update({ documentId: doc.id, content: draft });
+      const updated = await runUiTask("knowledge.save", () =>
+        rpc.memory.update({ documentId: doc.id, content: draft }),
+      );
       setDocs((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
       setOpenId(null);
     } catch {
@@ -142,7 +145,7 @@ function MemoryDocumentList({
     try {
       // Re-fetch through the section's own loader so the file is current,
       // then sync the list so the export matches what is displayed.
-      const fresh = await loadRef.current();
+      const fresh = await runUiTask("knowledge.export", () => loadRef.current());
       generation.current += 1;
       setDocs(fresh);
       const markdown = fresh.map((doc) => `# ${doc.path}\n\n${doc.content}`).join("\n\n");
@@ -156,7 +159,11 @@ function MemoryDocumentList({
 
   return (
     <div data-testid={testId}>
-      {error ? <div className="px-2.5 pb-2 text-[13px] text-destructive">{error}</div> : null}
+      {error ? (
+        <Alert variant="destructive" className="mb-2 px-2.5 py-2 text-[13px]">
+          {error}
+        </Alert>
+      ) : null}
       {loading ? <Skeleton className="h-10 w-full" /> : null}
       {!loading && docs.length === 0 && !error ? (
         <div className="px-2.5 py-1 text-[13.5px] text-muted-foreground">

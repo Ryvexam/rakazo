@@ -6,9 +6,17 @@ import type {
   ExternalConversation,
   ExternalConversationPolicy,
 } from "@ryvoko/contracts";
-import { Button } from "@ryvoko/ui-web";
+import {
+  Alert,
+  Button,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+  Textarea,
+  Toggle,
+} from "@ryvoko/ui-web";
 import { RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { SuccessPop } from "../components/ai/primitives";
 
 type ListenMode = "inherit" | "listen" | "mentions";
@@ -41,6 +49,7 @@ export function ExternalConversationSettings({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rulesId = useId();
   const senders = useMemo(
     () =>
       [
@@ -100,49 +109,48 @@ export function ExternalConversationSettings({
               { value: "mentions" as const, label: t`Mentions only` },
             ] satisfies Array<{ value: ListenMode; label: string }>
           ).map((option) => (
-            <button
+            <Toggle
               key={option.value}
-              type="button"
-              aria-pressed={mode === option.value}
-              onClick={() => {
+              pressed={mode === option.value}
+              onPressedChange={(pressed) => {
+                if (!pressed) return;
                 setMode(option.value);
                 setSaved(false);
               }}
-              className={`min-h-9 rounded-md px-2 text-[12px] leading-4 transition-colors ${
-                mode === option.value
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className="min-h-9 rounded-md px-2 text-[12px] leading-4"
             >
               {option.label}
-            </button>
+            </Toggle>
           ))}
         </div>
       </fieldset>
 
-      <label className="mt-6 block text-[13.5px] text-muted-foreground">
+      <div className="mt-6 block text-[13.5px] text-muted-foreground">
         <span className="flex items-center justify-between gap-3">
           <Trans>Room guidance</Trans>
           {rules !== null ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               title={t`Use default guidance`}
               aria-label={t`Use default guidance`}
               onClick={() => {
                 setRules(null);
                 setSaved(false);
               }}
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              className="shrink-0 text-muted-foreground"
             >
               <RotateCcw size={14} strokeWidth={1.8} />
-            </button>
+            </Button>
           ) : (
             <span className="text-[11.5px] text-muted-foreground/70">
               <Trans>{bot.name} default</Trans>
             </span>
           )}
         </span>
-        <textarea
+        <Textarea
+          id={rulesId}
           value={rules ?? bot.teamChatRules}
           maxLength={4000}
           onChange={(event) => {
@@ -151,9 +159,9 @@ export function ExternalConversationSettings({
           }}
           placeholder={t`Engage when... Ignore...`}
           rows={6}
-          className="mt-2 w-full resize-y rounded-lg border border-border bg-transparent px-3 py-2.5 text-[13.5px] leading-5 text-foreground outline-none focus:border-muted-foreground"
+          className="mt-2 w-full text-[13.5px] leading-5"
         />
-      </label>
+      </div>
 
       <div className="mt-6 border-t border-border pt-5">
         <h3 className="text-[13.5px] text-muted-foreground">
@@ -172,7 +180,7 @@ export function ExternalConversationSettings({
                     <span className="min-w-0 truncate text-[13.5px] text-foreground">
                       {sender.name}
                     </span>
-                    <select
+                    <NativeSelect
                       aria-label={t`${sender.name} handling`}
                       value={policy.mode}
                       onChange={(event) =>
@@ -182,20 +190,24 @@ export function ExternalConversationSettings({
                           event.target.value as AutomatedSenderPolicyMode,
                         )
                       }
-                      className="max-w-[165px] rounded-md border border-border bg-background px-2 py-1.5 text-[12.5px] text-foreground"
+                      className="max-w-[165px] text-[12.5px]"
                     >
                       {senderModes.map((option) => (
-                        <option key={option.value} value={option.value}>
+                        <NativeSelectOption key={option.value} value={option.value}>
                           {option.label}
-                        </option>
+                        </NativeSelectOption>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </div>
                   {policy.mode === "rollup" ? (
-                    <label className="mt-2 flex items-center justify-end gap-2 text-[12px] text-muted-foreground">
+                    <label
+                      htmlFor={`rollup-hours-${sender.id}`}
+                      className="mt-2 flex items-center justify-end gap-2 text-[12px] text-muted-foreground"
+                    >
                       <Trans>Every</Trans>
-                      <input
+                      <Input
                         aria-label={t`${sender.name} rollup hours`}
+                        id={`rollup-hours-${sender.id}`}
                         type="number"
                         min={1}
                         max={720}
@@ -211,7 +223,7 @@ export function ExternalConversationSettings({
                           }));
                           setSaved(false);
                         }}
-                        className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-end text-[12.5px] text-foreground"
+                        className="h-7 w-16 px-2 text-end text-[12.5px]"
                       />
                       <Trans>hours</Trans>
                     </label>
@@ -232,7 +244,11 @@ export function ExternalConversationSettings({
           <Trans>{bot.name} will still respond to direct mentions.</Trans>
         </p>
       ) : null}
-      {error ? <p className="mt-3 text-[13px] text-destructive">{error}</p> : null}
+      {error ? (
+        <Alert variant="destructive" className="mt-3 px-3 py-2 text-[13px]">
+          {error}
+        </Alert>
+      ) : null}
       <div className="mt-6 flex min-h-10 items-center gap-3">
         <Button
           disabled={saving}

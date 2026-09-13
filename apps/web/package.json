@@ -24,6 +24,7 @@
     "@ryvoko/ui-tokens": "workspace:*",
     "@ryvoko/ui-web": "workspace:*",
     "better-auth": "1.7.4",
+    "effect": "3.22.2",
     "lucide-react": "1.44.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
