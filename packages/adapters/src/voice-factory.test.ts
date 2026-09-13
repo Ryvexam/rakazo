@@ -452,6 +452,63 @@ describe("FishAudioVoiceProvider", () => {
     expect(result.nextPage).toBeUndefined();
   });
 
+  it("looks up an exact voice ID for favorites outside the current page", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          _id: "saved-voice-123",
+          title: "Saved Support Voice",
+          languages: ["en"],
+          visibility: "private",
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "owned", voiceId: "saved-voice-123" },
+      ctx,
+    );
+
+    expect(result.items).toEqual([
+      {
+        id: "saved-voice-123",
+        label: "Saved Support Voice",
+        description: "en",
+        scope: "owned",
+        languages: ["en"],
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://api.fish.audio/model/saved-voice-123",
+    );
+  });
+
+  it("falls back to an exact ID lookup when a name search returns no result", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], has_more: false })))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ _id: "voice-123456", title: "Favorite" })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "public", query: "voice-123456" },
+      ctx,
+    );
+
+    expect(result.items[0]).toMatchObject({
+      id: "voice-123456",
+      label: "Favorite",
+      scope: "public",
+    });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("https://api.fish.audio/model/voice-123456");
+  });
+
   it("resolves a selected voice by ID with display metadata", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

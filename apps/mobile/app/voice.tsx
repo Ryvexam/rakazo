@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -39,6 +39,7 @@ type VoiceStatus = {
   modelId: string;
 };
 type VoiceInfo = { id: string; label: string; description?: string };
+type VoiceLibraryItem = VoiceInfo & { alias?: string | null; favoriteId?: string };
 type VoiceBot = MobileBot & {
   voiceId?: string | null;
   voiceLabel?: string | null;
@@ -52,6 +53,12 @@ export default function VoiceSettings() {
   const [credentials, setCredentials] = useState<VoiceCredential[]>([]);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
+  const [voiceResults, setVoiceResults] = useState<VoiceLibraryItem[]>([]);
+  const [favorites, setFavorites] = useState<VoiceLibraryItem[]>([]);
+  const [voiceQuery, setVoiceQuery] = useState("");
+  const [favoriteFilter, setFavoriteFilter] = useState(false);
+  const [aliasVoiceId, setAliasVoiceId] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState("");
   const [bots, setBots] = useState<VoiceBot[]>([]);
   const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -81,9 +88,14 @@ export default function VoiceSettings() {
     setVoiceId(cred?.voiceId ?? "");
     setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
     if (cred) {
-      setVoices(await rpc<VoiceInfo[]>("voice/voices", { provider: selected }));
+      const listed = await rpc<VoiceInfo[]>("voice/voices", { provider: selected });
+      setVoices(listed);
+      setVoiceResults(listed);
+      setFavorites(await loadFavoriteVoices(selected));
     } else {
       setVoices([]);
+      setVoiceResults([]);
+      setFavorites([]);
     }
   }, []);
 
@@ -100,6 +112,16 @@ export default function VoiceSettings() {
 
   const selected = catalog.find((entry) => entry.id === provider);
   const credential = credentials.find((entry) => entry.provider === provider);
+
+  useEffect(() => {
+    if (!credential || !provider) return;
+    const timer = setTimeout(() => {
+      void searchVoiceLibrary(provider, voiceQuery)
+        .then(setVoiceResults)
+        .catch(() => setVoiceResults([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [credential, provider, voiceQuery]);
 
   async function connect() {
     if (!selected || apiKey.trim().length < 8) return;
@@ -162,11 +184,28 @@ export default function VoiceSettings() {
   function openBotVoicePicker(bot: VoiceBot) {
     if (botVoicePending) return;
     const selectedVoice = bot.voiceId ?? "";
-    const selectedInfo = voices.find((voice) => voice.id === selectedVoice);
+    const assignable = [
+      ...new Map(
+        [...voices, ...voiceResults, ...favorites].map((voice) => [voice.id, voice]),
+      ).values(),
+    ].map(
+      (voice): VoiceLibraryItem => ({
+        ...voice,
+        alias: "alias" in voice && typeof voice.alias === "string" ? voice.alias : null,
+      }),
+    );
+    const selectedInfo = assignable.find((voice) => voice.id === selectedVoice);
     const options =
       selectedVoice && !selectedInfo
-        ? [{ id: selectedVoice, label: bot.voiceLabel || t("Unavailable voice") }, ...voices]
-        : voices;
+        ? [
+            {
+              id: selectedVoice,
+              label: bot.voiceLabel || t("Unavailable voice"),
+              alias: null,
+            },
+            ...assignable,
+          ]
+        : assignable;
     presentMessageActionSheet({
       title: bot.name,
       actions: [
@@ -175,7 +214,7 @@ export default function VoiceSettings() {
           onPress: () => void chooseBotVoice(bot.id, ""),
         },
         ...options.map((voice) => ({
-          text: voice.label,
+          text: voice.alias || voice.label,
           onPress: () => void chooseBotVoice(bot.id, voice.id),
         })),
       ],
@@ -202,6 +241,56 @@ export default function VoiceSettings() {
       setError(err instanceof Error ? err.message : t("Could not save that bot voice"));
     } finally {
       setBotVoicePending(null);
+    }
+  }
+
+  async function toggleFavorite(voice: VoiceLibraryItem) {
+    const favorite = favorites.find((item) => item.id === voice.id);
+    try {
+      if (favorite?.favoriteId) {
+        await rpc("voice/favorites/delete", { id: favorite.favoriteId });
+        setFavorites((current) => current.filter((item) => item.id !== voice.id));
+      } else {
+        const saved = await rpc<{ id: string; label: string | null }>("voice/favorites/create", {
+          provider,
+          voiceId: voice.id,
+          label: voice.alias ?? voice.label,
+        });
+        setFavorites((current) => [
+          ...current.filter((item) => item.id !== voice.id),
+          { ...voice, alias: saved.label, favoriteId: saved.id },
+        ]);
+      }
+    } catch {
+      setError(t("Could not update favorites"));
+    }
+  }
+
+  async function saveVoiceAlias(voice: VoiceLibraryItem) {
+    const alias = aliasDraft.trim() || null;
+    const existing = favorites.find((item) => item.id === voice.id);
+    const next = existing
+      ? favorites.map((item) => (item.id === voice.id ? { ...item, alias } : item))
+      : [...favorites, { ...voice, alias }];
+    try {
+      const saved = existing?.favoriteId
+        ? await rpc<{ id: string; label: string | null }>("voice/favorites/update", {
+            id: existing.favoriteId,
+            label: alias,
+          })
+        : await rpc<{ id: string; label: string | null }>("voice/favorites/create", {
+            provider,
+            voiceId: voice.id,
+            label: alias,
+          });
+      setFavorites(
+        next.map((item) =>
+          item.id === voice.id ? { ...item, alias: saved.label, favoriteId: saved.id } : item,
+        ),
+      );
+      setAliasVoiceId(null);
+    } catch {
+      setError(t("Could not save that alias"));
     }
   }
 
@@ -233,6 +322,8 @@ export default function VoiceSettings() {
               key={entry.id}
               onPress={() => {
                 setProvider(entry.id);
+                setVoiceQuery("");
+                setFavoriteFilter(false);
                 void load(entry.id);
               }}
               style={[styles.card, provider === entry.id && styles.cardActive]}
@@ -316,6 +407,89 @@ export default function VoiceSettings() {
                 <Text style={styles.secondaryLabel}>{t("Hear a sample")}</Text>
               </Pressable>
             ) : null}
+            <View style={styles.library}>
+              <View style={styles.libraryHeader}>
+                <Text style={styles.optionHeading}>{t("Voice library")}</Text>
+                <View style={styles.filterButtons}>
+                  <Pressable onPress={() => setFavoriteFilter(false)}>
+                    <Text style={favoriteFilter ? styles.filterLabel : styles.filterActive}>
+                      {t("All")}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => setFavoriteFilter(true)}>
+                    <Text style={favoriteFilter ? styles.filterActive : styles.filterLabel}>
+                      {t("Favorites")}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+              <TextInput
+                value={voiceQuery}
+                onChangeText={setVoiceQuery}
+                placeholder={t("Search voices by name or ID")}
+                placeholderTextColor={native.tertiaryLabel}
+                accessibilityLabel={t("Search voices by name or ID")}
+                style={styles.searchInput}
+              />
+              {voiceResults
+                .filter(
+                  (voice) => !favoriteFilter || favorites.some((item) => item.id === voice.id),
+                )
+                .map((voice) => {
+                  const favorite = favorites.some((item) => item.id === voice.id);
+                  const alias = favorites.find((item) => item.id === voice.id)?.alias;
+                  return (
+                    <View key={voice.id} style={styles.libraryRow}>
+                      <Pressable
+                        style={styles.libraryCopy}
+                        onPress={() => void chooseVoice(voice.id)}
+                      >
+                        <Text style={styles.voiceLabel}>{alias || voice.label}</Text>
+                        {voice.description ? (
+                          <Text style={styles.optionDescription}>
+                            {voice.description} · {voice.id}
+                          </Text>
+                        ) : (
+                          <Text style={styles.optionDescription}>{voice.id}</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          favorite ? t("Remove from favorites") : t("Add to favorites")
+                        }
+                        onPress={() => void toggleFavorite(voice)}
+                      >
+                        <Text style={favorite ? styles.favoriteActive : styles.filterLabel}>
+                          {favorite ? "★" : "☆"}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          setAliasVoiceId(voice.id);
+                          setAliasDraft(alias || "");
+                        }}
+                      >
+                        <Text style={styles.filterLabel}>{t("Alias")}</Text>
+                      </Pressable>
+                      {aliasVoiceId === voice.id ? (
+                        <View style={styles.aliasEditor}>
+                          <TextInput
+                            value={aliasDraft}
+                            onChangeText={setAliasDraft}
+                            placeholder={t("Alias")}
+                            placeholderTextColor={native.tertiaryLabel}
+                            style={styles.aliasInput}
+                          />
+                          <Pressable onPress={() => void saveVoiceAlias(voice)}>
+                            <Text style={styles.filterActive}>{t("Save")}</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+            </View>
             <View style={styles.botVoices}>
               <Text style={styles.optionHeading}>{t("Bot voices")}</Text>
               {bots.map((bot) => {
@@ -402,6 +576,48 @@ function createVoiceStyles() {
     optionDescription: { color: native.tertiaryLabel, fontSize: 12, marginTop: 2 },
     voices: { marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: tokens.border },
     botVoices: { marginTop: 16, borderRadius: 12, borderWidth: 1, borderColor: tokens.border },
+    library: { marginTop: 16, borderRadius: 12, borderWidth: 1, borderColor: tokens.border },
+    libraryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingRight: 14,
+    },
+    filterButtons: { flexDirection: "row", gap: 12 },
+    filterLabel: { color: native.secondaryLabel, fontSize: 13 },
+    filterActive: { color: native.label, fontSize: 13, fontWeight: "600" },
+    favoriteActive: { color: tokens.success, fontSize: 17 },
+    searchInput: {
+      marginHorizontal: 12,
+      marginBottom: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tokens.border,
+      color: native.label,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+    },
+    libraryRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderTopWidth: 1,
+      borderTopColor: tokens.border,
+    },
+    libraryCopy: { flex: 1, minWidth: 120 },
+    aliasEditor: { flexDirection: "row", alignItems: "center", gap: 8, width: "100%" },
+    aliasInput: {
+      flex: 1,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: tokens.border,
+      color: native.label,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+    },
     voiceRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -426,4 +642,43 @@ function createVoiceStyles() {
     secondary: { marginTop: 16, alignItems: "center" },
     secondaryLabel: { color: native.secondaryLabel, fontSize: 15 },
   });
+}
+
+async function searchVoiceLibrary(provider: string, query: string): Promise<VoiceLibraryItem[]> {
+  try {
+    const result = await rpc<{ items: VoiceLibraryItem[] }>("voice/search", {
+      provider,
+      query: query.trim() || undefined,
+      page: 1,
+      pageSize: 50,
+    });
+    return result.items;
+  } catch {
+    const response = await rpc<VoiceInfo[]>("voice/voices", { provider });
+    const normalized = query.trim().toLocaleLowerCase();
+    return response.filter(
+      (voice) =>
+        !normalized ||
+        [voice.id, voice.label, voice.description]
+          .filter(Boolean)
+          .some((value) => value?.toLocaleLowerCase().includes(normalized)),
+    );
+  }
+}
+
+async function loadFavoriteVoices(provider: string): Promise<VoiceLibraryItem[]> {
+  try {
+    const saved = await rpc<Array<{ id: string; voiceId: string; label: string | null }>>(
+      "voice/favorites/list",
+      { provider },
+    );
+    return saved.map((item) => ({
+      id: item.voiceId,
+      label: item.label || item.voiceId,
+      alias: item.label,
+      favoriteId: item.id,
+    }));
+  } catch {
+    return [];
+  }
 }

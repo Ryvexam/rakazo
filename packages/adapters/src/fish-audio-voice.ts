@@ -114,6 +114,19 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     query: VoiceCatalogQuery,
     context: AdapterContext,
   ): Promise<VoiceCatalogPage> {
+    const searchContext = {
+      ...context,
+      signal: voiceDeadline(context.signal, LIST_VOICES_DEADLINE_MS),
+    };
+    const requestedVoiceId = boundedQuery(query.voiceId);
+    if (requestedVoiceId) {
+      const voice = await this.getVoice(apiKey, requestedVoiceId, searchContext);
+      return {
+        items: voice ? [{ ...voice, scope: voice.scope ?? query.scope }] : [],
+        windowLimited: false,
+      };
+    }
+
     const page = boundedPage(query.page);
     const pageSize = boundedPageSize(query.pageSize);
     const title = boundedQuery(query.query);
@@ -129,7 +142,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
 
     const res = await fetch(`${API}/model?${params}`, {
       headers: fishAudioHeaders(apiKey),
-      signal: voiceDeadline(context.signal, LIST_VOICES_DEADLINE_MS),
+      signal: searchContext.signal,
     });
     const body = await readVoiceJson(res, { requireValid: res.ok });
     if (!res.ok)
@@ -139,6 +152,15 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     const items = models
       .map((model) => modelToVoice(model, query.scope))
       .filter((voice): voice is VoiceInfo => voice !== null);
+    if (items.length === 0 && looksLikeVoiceId(title)) {
+      const voice = await this.getVoice(apiKey, title, searchContext);
+      if (voice) {
+        return {
+          items: [{ ...voice, scope: voice.scope ?? query.scope }],
+          windowLimited: false,
+        };
+      }
+    }
     const hasMore = modelPageHasMore(body, page, models.length, pageSize);
     const windowLimited = modelWindowIsLimited(body);
     return {
@@ -371,6 +393,11 @@ function boundedPageSize(value: number | undefined): number {
 /** Trim and cap provider-side search text before putting it in a URL. */
 function boundedQuery(value: string | undefined): string {
   return value?.trim().slice(0, SEARCH_MAX_QUERY_LENGTH) ?? "";
+}
+
+/** Recognize likely opaque Fish IDs without treating ordinary voice names as IDs. */
+function looksLikeVoiceId(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{7,119}$/.test(value);
 }
 
 /** Remove duplicate IDs while retaining provider ordering. */

@@ -32,6 +32,8 @@ type VoiceCredentialWithLabel = VoiceCredential & {
   voiceLabel?: string | null;
 };
 
+type VoiceLibraryItem = VoiceInfo & { alias?: string | null; favoriteId?: string };
+
 export function VoiceSettingsOverlay({
   onClose,
   embedded = false,
@@ -51,6 +53,13 @@ export function VoiceSettingsOverlay({
   const [credentials, setCredentials] = useState<VoiceCredential[]>([]);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
+  const [voiceResults, setVoiceResults] = useState<VoiceLibraryItem[]>([]);
+  const [favorites, setFavorites] = useState<VoiceLibraryItem[]>([]);
+  const [voiceQuery, setVoiceQuery] = useState("");
+  const [favoriteFilter, setFavoriteFilter] = useState(false);
+  const [aliasVoiceId, setAliasVoiceId] = useState<string | null>(null);
+  const [aliasDraft, setAliasDraft] = useState("");
+  const [voiceLibraryPending, setVoiceLibraryPending] = useState(false);
   const [bots, setBots] = useState<VoiceBot[]>([]);
   const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -94,9 +103,13 @@ export function VoiceSettingsOverlay({
     if (cred) {
       const listed = await rpc.voice.voices({ provider: selected });
       setVoices(listed);
+      setVoiceResults(listed);
+      setFavorites(await loadFavoriteVoices(selected));
       if (!activeVoice && listed[0]) setVoiceId(listed[0].id);
     } else {
       setVoices([]);
+      setVoiceResults([]);
+      setFavorites([]);
     }
   }
 
@@ -126,6 +139,39 @@ export function VoiceSettingsOverlay({
           : [],
     [credential, t, voices, voiceId],
   );
+
+  const visibleVoiceItems = useMemo(() => {
+    const combined = new Map<string, VoiceLibraryItem>();
+    for (const voice of voiceResults) combined.set(voice.id, voice);
+    for (const voice of favorites) {
+      const existing = combined.get(voice.id);
+      combined.set(voice.id, { ...voice, ...existing, alias: voice.alias ?? existing?.alias });
+    }
+    const items = [...combined.values()];
+    return favoriteFilter
+      ? items.filter((voice) => favorites.some((item) => item.id === voice.id))
+      : items;
+  }, [favoriteFilter, favorites, voiceResults]);
+
+  const assignableVoiceOptions = useMemo(() => {
+    const combined = new Map<string, VoiceLibraryItem>();
+    for (const voice of [...voiceOptions, ...voiceResults, ...favorites]) {
+      combined.set(voice.id, { ...combined.get(voice.id), ...voice });
+    }
+    return [...combined.values()];
+  }, [favorites, voiceOptions, voiceResults]);
+
+  useEffect(() => {
+    if (!credential || !provider) return;
+    const timer = window.setTimeout(() => {
+      setVoiceLibraryPending(true);
+      void searchVoiceLibrary(provider, voiceQuery)
+        .then(setVoiceResults)
+        .catch(() => setVoiceResults([]))
+        .finally(() => setVoiceLibraryPending(false));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [credential, provider, voiceQuery]);
 
   async function connectKey() {
     if (!selected || !apiKey.trim()) return;
@@ -210,6 +256,49 @@ export function VoiceSettingsOverlay({
     }
   }
 
+  async function toggleFavorite(voice: VoiceLibraryItem) {
+    const favorite = favorites.find((item) => item.id === voice.id);
+    try {
+      if (favorite?.favoriteId) {
+        await rpc.voice.favorites.delete({ id: favorite.favoriteId });
+        setFavorites((current) => current.filter((item) => item.id !== voice.id));
+      } else {
+        const saved = await rpc.voice.favorites.create({
+          provider,
+          voiceId: voice.id,
+          label: voice.alias ?? voice.label,
+        });
+        setFavorites((current) => [
+          ...current.filter((item) => item.id !== voice.id),
+          { ...voice, alias: saved.label, favoriteId: saved.id },
+        ]);
+      }
+    } catch {
+      setError(t`Could not update favorites`);
+    }
+  }
+
+  async function saveVoiceAlias(voice: VoiceLibraryItem) {
+    const alias = aliasDraft.trim() || null;
+    const existing = favorites.find((item) => item.id === voice.id);
+    const next = existing
+      ? favorites.map((item) => (item.id === voice.id ? { ...item, alias } : item))
+      : [...favorites, { ...voice, alias }];
+    try {
+      const saved = existing?.favoriteId
+        ? await rpc.voice.favorites.update({ id: existing.favoriteId, label: alias })
+        : await rpc.voice.favorites.create({ provider, voiceId: voice.id, label: alias });
+      setFavorites(
+        next.map((item) =>
+          item.id === voice.id ? { ...item, alias: saved.label, favoriteId: saved.id } : item,
+        ),
+      );
+      setAliasVoiceId(null);
+    } catch {
+      setError(t`Could not save that alias`);
+    }
+  }
+
   async function testVoice() {
     setError(null);
     setNotice(null);
@@ -263,6 +352,8 @@ export function VoiceSettingsOverlay({
                   onClick={() => {
                     setProvider(entry.id);
                     setApiKey("");
+                    setVoiceQuery("");
+                    setFavoriteFilter(false);
                     setError(null);
                     setNotice(null);
                     void refresh(entry.id);
@@ -379,6 +470,113 @@ export function VoiceSettingsOverlay({
                   >
                     {pending === "test" ? <Trans>Playing…</Trans> : <Trans>Hear a sample</Trans>}
                   </Button>
+                  <section data-testid="voice-library" className="mt-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-[14px] text-muted-foreground">
+                        <Trans>Voice library</Trans>
+                      </h3>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={favoriteFilter ? "ghost" : "secondary"}
+                          onClick={() => setFavoriteFilter(false)}
+                        >
+                          <Trans>All</Trans>
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={favoriteFilter ? "secondary" : "ghost"}
+                          onClick={() => setFavoriteFilter(true)}
+                        >
+                          <Trans>Favorites</Trans>
+                        </Button>
+                      </div>
+                    </div>
+                    <Input
+                      className="mt-2"
+                      value={voiceQuery}
+                      onChange={(event) => setVoiceQuery(event.target.value)}
+                      placeholder={t`Search voices by name or ID`}
+                      aria-label={t`Search voices by name or ID`}
+                    />
+                    <div className="mt-2 divide-y divide-border rounded-xl border border-border">
+                      {voiceLibraryPending ? (
+                        <p className="px-3.5 py-3 text-[13px] text-muted-foreground">
+                          <Trans>Searching voices…</Trans>
+                        </p>
+                      ) : null}
+                      {!voiceLibraryPending && visibleVoiceItems.length === 0 ? (
+                        <p className="px-3.5 py-3 text-[13px] text-muted-foreground">
+                          <Trans>No matching voices</Trans>
+                        </p>
+                      ) : null}
+                      {visibleVoiceItems.map((voice) => {
+                        const isFavorite = favorites.some((item) => item.id === voice.id);
+                        return (
+                          <div key={voice.id} className="flex items-center gap-2 px-3.5 py-3">
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-start"
+                              onClick={() => void chooseVoice(voice.id)}
+                            >
+                              <span className="block truncate text-[14px] text-foreground">
+                                {voice.alias || voice.label}
+                              </span>
+                              <span className="block truncate text-[12px] text-muted-foreground">
+                                {voice.description || voice.label} · {voice.id}
+                              </span>
+                            </button>
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={
+                                isFavorite ? t`Remove from favorites` : t`Add to favorites`
+                              }
+                              onClick={() => void toggleFavorite(voice)}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={isFavorite ? "text-foreground" : "text-muted-foreground"}
+                              >
+                                {isFavorite ? "★" : "☆"}
+                              </span>
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setAliasVoiceId(voice.id);
+                                setAliasDraft(voice.alias ?? "");
+                              }}
+                            >
+                              <Trans>Alias</Trans>
+                            </Button>
+                            {aliasVoiceId === voice.id ? (
+                              <div className="flex gap-1">
+                                <Input
+                                  className="w-28"
+                                  value={aliasDraft}
+                                  onChange={(event) => setAliasDraft(event.target.value)}
+                                  aria-label={t`Voice alias`}
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void saveVoiceAlias(voice)}
+                                >
+                                  <Trans>Save</Trans>
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
                   <section data-testid="fish-bot-voices" className="mt-6">
                     <h3 className="text-[14px] text-muted-foreground">
                       <Trans>Bot voices</Trans>
@@ -396,9 +594,9 @@ export function VoiceSettingsOverlay({
                                   id: selectedVoice,
                                   label: bot.voiceLabel || t`Unavailable voice`,
                                 },
-                                ...voiceOptions,
+                                ...assignableVoiceOptions,
                               ]
-                            : voiceOptions;
+                            : assignableVoiceOptions;
                         return (
                           <label
                             key={bot.id}
@@ -420,7 +618,7 @@ export function VoiceSettingsOverlay({
                               </NativeSelectOption>
                               {botVoiceOptions.map((voice) => (
                                 <NativeSelectOption key={voice.id} value={voice.id}>
-                                  {voice.label}
+                                  {voice.alias || voice.label}
                                 </NativeSelectOption>
                               ))}
                             </NativeSelect>
@@ -468,4 +666,24 @@ export function VoiceSettingsOverlay({
       </DialogContent>
     </Dialog>
   );
+}
+
+async function searchVoiceLibrary(provider: string, query: string): Promise<VoiceLibraryItem[]> {
+  const result = await rpc.voice.search({
+    provider,
+    query: query.trim() || undefined,
+    page: 1,
+    pageSize: 50,
+  });
+  return result.items;
+}
+
+async function loadFavoriteVoices(provider: string): Promise<VoiceLibraryItem[]> {
+  const saved = await rpc.voice.favorites.list({ provider });
+  return saved.map((item) => ({
+    id: item.voiceId,
+    label: item.label || item.voiceId,
+    alias: item.label,
+    favoriteId: item.id,
+  }));
 }

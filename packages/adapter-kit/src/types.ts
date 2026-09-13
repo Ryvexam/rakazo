@@ -470,6 +470,8 @@ export type VoiceCatalogScope = "public" | "owned";
 export interface VoiceCatalogQuery {
   scope: VoiceCatalogScope;
   query?: string;
+  /** Exact provider voice ID lookup, used for saved favorites outside result pages. */
+  voiceId?: string;
   language?: string;
   page?: number;
   pageSize?: number;
