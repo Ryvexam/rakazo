@@ -169,7 +169,7 @@ export class FishAudioVoiceProvider implements VoiceProvider {
       .filter((voice): voice is VoiceInfo => voice !== null);
     if (items.length === 0 && looksLikeVoiceId(title)) {
       const voice = await this.getVoice(apiKey, title, searchContext);
-      const matched = exactMatchForQueryScope(voice, query.scope);
+      const matched = voice ? exactMatchForQueryScope(voice, query.scope) : null;
       if (matched) {
         return {
           items: [matched],
