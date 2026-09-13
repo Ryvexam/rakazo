@@ -1022,6 +1022,10 @@ function Thread() {
   function runSlashAction(action: SlashActionId) {
     setDraft("");
     setSlashQuery(null);
+    if (action === "bot-goals" || action === "bot-autonomy" || action === "bot-routine") {
+      if (botId) router.push({ pathname: "/bot-settings", params: { botId } });
+      return;
+    }
     if (action === "chat-settings") {
       if (inGroup && groupId) {
         router.push({ pathname: "/group-settings", params: { groupId } });

@@ -2,6 +2,9 @@ export const SLASH_ACTIONS = [
   { id: "chat-settings" as const, label: "Chat Settings" },
   { id: "settings-general" as const, label: "Settings: General" },
   { id: "settings-usage" as const, label: "Settings: Usage" },
+  { id: "bot-goals" as const, label: "Bot: Goals" },
+  { id: "bot-autonomy" as const, label: "Bot: Autonomy" },
+  { id: "bot-routine" as const, label: "Bot: New routine" },
 ] as const;
 
 export type SlashActionId = (typeof SLASH_ACTIONS)[number]["id"];

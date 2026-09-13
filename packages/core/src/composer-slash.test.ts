@@ -45,6 +45,9 @@ describe("SLASH_ACTIONS", () => {
       "chat-settings",
       "settings-general",
       "settings-usage",
+      "bot-goals",
+      "bot-autonomy",
+      "bot-routine",
     ]);
   });
 });

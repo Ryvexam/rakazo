@@ -5,7 +5,6 @@ import { Lightbulb, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { rpc } from "../lib/rpc";
-import { AutonomySection } from "./AutonomySection";
 import {
   buildUserPromotedGoalNotes,
   goalTitle,
@@ -281,7 +280,6 @@ export function ScratchpadSection({ botId }: { botId: string }) {
         </div>
       ) : null}
 
-      <AutonomySection botId={botId} />
       <WorkspaceSection botId={botId} />
 
       {error ? <div className="mt-2 text-[13px] text-destructive">{error}</div> : null}

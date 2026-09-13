@@ -246,10 +246,18 @@ const McpServersOverlay = lazy(() =>
   import("./McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
 );
 const CallView = lazy(() => import("./CallView").then((module) => ({ default: module.CallView })));
+const AutonomySection = lazy(() =>
+  import("./AutonomySection").then((module) => ({ default: module.AutonomySection })),
+);
+const ScratchpadSection = lazy(() =>
+  import("./ScratchpadSection").then((module) => ({ default: module.ScratchpadSection })),
+);
 
 type Panel =
   | "computer"
   | "settings"
+  | "goals"
+  | "autonomy"
   | "routine"
   | "create"
   | "create-group"
@@ -3257,6 +3265,24 @@ export function ShellPage() {
                   .then(setUsage)
                   .catch(() => undefined);
                 openSettings("usage");
+                return;
+              }
+              if (action === "bot-goals") {
+                if (!inGroup && active) setPanel("goals");
+                return;
+              }
+              if (action === "bot-autonomy") {
+                if (!inGroup && active) setPanel("autonomy");
+                return;
+              }
+              if (action === "bot-routine") {
+                if (!inGroup && active) {
+                  setRoutineDraft(emptyRoutineDraft());
+                  setRoutineWebhookSecret(null);
+                  setEditingRoutine(null);
+                  setRoutineError(null);
+                  setPanel("routine");
+                }
               }
             }}
           />
@@ -3405,6 +3431,16 @@ export function ShellPage() {
                   );
                 })}
               </div>
+            ) : null}
+            {panel === "goals" && active ? (
+              <Suspense fallback={null}>
+                <ScratchpadSection botId={active.id} />
+              </Suspense>
+            ) : null}
+            {panel === "autonomy" && active ? (
+              <Suspense fallback={null}>
+                <AutonomySection botId={active.id} />
+              </Suspense>
             ) : null}
             {panel === "create-group" ? (
               <CreateGroupForm
