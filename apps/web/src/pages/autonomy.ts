@@ -131,16 +131,51 @@ export function visibleWorkNotes(notes: string): string {
     .trim();
 }
 
+export const SCRATCHPAD_NOTES_MAX = 4_000;
+
+/** Absolute ceiling from autonomy chain-depth options; beyond this, promote is refused. */
+export const ABSOLUTE_MAX_GOAL_CHAIN_DEPTH = Math.max(
+  ...MAX_GOAL_CHAIN_DEPTH_OPTIONS,
+) as MaxGoalChainDepth;
+
+export function ideaChainDepth(notes: string): number {
+  return parseOpportunityMetadata(notes)?.depth ?? 1;
+}
+
+export function exceedsGoalChainDepth(
+  notes: string,
+  maxDepth: MaxGoalChainDepth = ABSOLUTE_MAX_GOAL_CHAIN_DEPTH,
+): boolean {
+  return ideaChainDepth(notes) > maxDepth;
+}
+
+function appendLineageNotes(originalNotes: string, lineageLines: string[]): string {
+  const lineage = lineageLines.join("\n");
+  const original = originalNotes.trim();
+  if (!original) return lineage.slice(0, SCRATCHPAD_NOTES_MAX);
+  const separator = "\n";
+  const budget = SCRATCHPAD_NOTES_MAX - lineage.length - separator.length;
+  if (budget <= 0) return lineage.slice(0, SCRATCHPAD_NOTES_MAX);
+  return `${original.slice(0, budget)}${separator}${lineage}`;
+}
+
 export function buildUserPromotedGoalNotes(itemId: string, notes: string): string {
   const metadata = parseOpportunityMetadata(notes);
-  return [
-    notes.trim(),
+  return appendLineageNotes(notes, [
     USER_PROMOTED_GOAL_MARKER,
     `sourceIdeaId=${itemId}`,
     `depth=${metadata?.depth ?? 1}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ]);
+}
+
+/** Twin of user promote notes for autonomous promotion lineage (truncates to notes max). */
+export function buildAutonomousPromotedGoalNotes(itemId: string, notes: string): string {
+  const metadata = parseOpportunityMetadata(notes);
+  return appendLineageNotes(notes, [
+    AUTONOMOUS_GOAL_MARKER,
+    `sourceIdeaId=${itemId}`,
+    `depth=${metadata?.depth ?? 1}`,
+  ]);
 }
 
 export function buildAutonomyPrompt(

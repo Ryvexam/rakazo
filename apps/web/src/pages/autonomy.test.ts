@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   AUTONOMOUS_GOAL_MARKER,
   autonomyCron,
+  buildAutonomousPromotedGoalNotes,
   buildAutonomyPrompt,
   buildUserPromotedGoalNotes,
+  exceedsGoalChainDepth,
   goalTitle,
   heartbeatFromCrons,
   ideaTitle,
@@ -13,6 +15,7 @@ import {
   parseAutonomyLimits,
   parseAutonomyMode,
   parseOpportunityMetadata,
+  SCRATCHPAD_NOTES_MAX,
   USER_PROMOTED_GOAL_MARKER,
   visibleWorkNotes,
 } from "./autonomy";
@@ -72,5 +75,41 @@ Add speaking-rate controls to voice settings.`;
     expect(promoted).toContain("sourceIdeaId=idea-1");
     expect(promoted).toContain("depth=2");
     expect(visibleWorkNotes(promoted)).toBe("Add speaking-rate controls to voice settings.");
+  });
+
+  it("keeps promoted notes within the scratchpad notes limit", () => {
+    const notes = `${OPPORTUNITY_MARKER}
+sourceGoalId=goal-1
+depth=2
+value=high
+effort=low
+confidence=high
+
+${"x".repeat(SCRATCHPAD_NOTES_MAX)}`;
+    const promoted = buildUserPromotedGoalNotes("idea-1", notes);
+    expect(promoted.length).toBeLessThanOrEqual(SCRATCHPAD_NOTES_MAX);
+    expect(promoted).toContain(USER_PROMOTED_GOAL_MARKER);
+    expect(promoted).toContain("sourceIdeaId=idea-1");
+    expect(promoted).toMatch(/sourceIdeaId=idea-1\ndepth=2$/);
+
+    const autonomous = buildAutonomousPromotedGoalNotes("idea-1", notes);
+    expect(autonomous.length).toBeLessThanOrEqual(SCRATCHPAD_NOTES_MAX);
+    expect(autonomous).toContain(AUTONOMOUS_GOAL_MARKER);
+    expect(autonomous).toContain("sourceIdeaId=idea-1");
+    expect(autonomous).toContain("depth=2");
+  });
+
+  it("refuses goal-chain depths beyond the absolute autonomy ceiling", () => {
+    const notes = `${OPPORTUNITY_MARKER}
+sourceGoalId=goal-1
+depth=4
+value=high
+effort=low
+confidence=high
+
+Too deep.`;
+    expect(exceedsGoalChainDepth(notes)).toBe(true);
+    expect(exceedsGoalChainDepth(notes, 3)).toBe(true);
+    expect(exceedsGoalChainDepth(notes.replace("depth=4", "depth=3"), 3)).toBe(false);
   });
 });

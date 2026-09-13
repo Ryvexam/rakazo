@@ -73,16 +73,13 @@ export function AutonomySection({ botId }: { botId: string }) {
   async function refresh() {
     const [routines, recent] = await Promise.all([
       rpc.routines.list({ botId }),
-      rpc.runs.list({ filter: "recent" }),
+      rpc.runs.list({ filter: "recent", botId }),
     ]);
     applyRoutine(routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null);
     setRuns(
       recent.runs
         .filter(
-          (run) =>
-            run.botId === botId &&
-            run.trigger === "routine" &&
-            run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
+          (run) => run.trigger === "routine" && run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
         )
         .slice(0, 5),
     );
@@ -90,7 +87,7 @@ export function AutonomySection({ botId }: { botId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([rpc.routines.list({ botId }), rpc.runs.list({ filter: "recent" })])
+    void Promise.all([rpc.routines.list({ botId }), rpc.runs.list({ filter: "recent", botId })])
       .then(([routines, recent]) => {
         if (cancelled) return;
         applyRoutine(routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null);
@@ -98,9 +95,7 @@ export function AutonomySection({ botId }: { botId: string }) {
           recent.runs
             .filter(
               (run) =>
-                run.botId === botId &&
-                run.trigger === "routine" &&
-                run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
+                run.trigger === "routine" && run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
             )
             .slice(0, 5),
         );

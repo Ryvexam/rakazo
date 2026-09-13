@@ -38,11 +38,13 @@ export async function listSpaceRuns(
   prisma: PrismaClient,
   actor: Actor,
   filter: "active" | "recent",
+  botId?: string,
 ): Promise<RunActivityRow[]> {
   const rows = await prisma.run.findMany({
     where: {
       spaceId: actor.spaceId,
       userId: actor.userId,
+      ...(botId ? { botId } : {}),
       bot: { archivedAt: null },
       ...(filter === "active"
         ? { status: { in: [...ACTIVE_RUN_STATUSES] } }

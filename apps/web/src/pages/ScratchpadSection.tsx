@@ -8,6 +8,7 @@ import { rpc } from "../lib/rpc";
 import { AutonomySection } from "./AutonomySection";
 import {
   buildUserPromotedGoalNotes,
+  exceedsGoalChainDepth,
   goalTitle,
   isIdeaTitle,
   parseOpportunityMetadata,
@@ -31,6 +32,7 @@ export function ScratchpadSection({ botId }: { botId: string }) {
     () => items.filter((item) => item.status !== "done" && isIdeaTitle(item.title)),
     [items],
   );
+  const completed = useMemo(() => items.filter((item) => item.status === "done"), [items]);
 
   async function refresh() {
     const generation = ++listGeneration.current;
@@ -102,6 +104,10 @@ export function ScratchpadSection({ botId }: { botId: string }) {
 
   async function promoteIdea(item: ScratchpadItem) {
     if (busy) return;
+    if (exceedsGoalChainDepth(item.notes)) {
+      setError(t`This idea is past the goal chain limit`);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -278,6 +284,44 @@ export function ScratchpadSection({ botId }: { botId: string }) {
               </div>
             );
           })}
+        </div>
+      ) : null}
+
+      {completed.length > 0 ? (
+        <div className="mt-6" data-testid="bot-scratchpad-completed">
+          <div className="mb-2 text-[14px] text-muted-foreground">
+            <Trans>Completed</Trans>
+          </div>
+          {completed.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-[13.5px] text-muted-foreground/80"
+            >
+              <div className="min-w-0 flex-1 truncate" dir="auto">
+                {isIdeaTitle(item.title) ? goalTitle(item.title) : item.title}
+              </div>
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-label={t`Reopen`}
+                disabled={busy}
+                onClick={() => void setStatus(item, "open")}
+                className="shrink-0 text-muted-foreground/70"
+              >
+                <Trans>Open</Trans>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t`Remove`}
+                disabled={busy}
+                onClick={() => void removeItem(item)}
+                className="shrink-0 text-muted-foreground/70"
+              >
+                <X />
+              </Button>
+            </div>
+          ))}
         </div>
       ) : null}
 
