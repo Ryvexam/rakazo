@@ -15,13 +15,20 @@ function matchesVoiceQuery(voice: VoiceLibraryItem, query: string): boolean {
     .some((value) => String(value).toLowerCase().includes(query));
 }
 
+function includeVoice(voice: VoiceLibraryItem, query: string, resultIds: Set<string>): boolean {
+  // Provider hits are kept as returned (server may match on author and other fields).
+  // Favorite-only rows must still match the local query.
+  if (!query) return true;
+  return resultIds.has(voice.id) || matchesVoiceQuery(voice, query);
+}
+
 /**
  * Merge provider search hits with saved favorites, then apply the search query
  * and optional Favorites-tab filter.
  *
- * Provider hits are kept as returned (Fish and listVoices fallbacks can match
- * on author and other server-side fields). Only favorite-only rows are filtered
- * by the local query so unrelated saved voices do not reappear in search.
+ * Provider hits are kept as returned. Only favorite-only rows are filtered by
+ * the local query so unrelated saved voices do not reappear in search.
+ * The Favorites tab keeps saved favorite order.
  */
 export function visibleVoiceLibraryItems(
   voiceResults: VoiceLibraryItem[],
@@ -41,11 +48,18 @@ export function visibleVoiceLibraryItems(
     });
   }
   const query = voiceQuery.trim().toLowerCase();
+
+  if (favoriteFilter) {
+    return favorites.flatMap((favorite) => {
+      const voice = combined.get(favorite.id);
+      if (!voice || !includeVoice(voice, query, resultIds)) return [];
+      return [voice];
+    });
+  }
+
   let items = [...combined.values()];
   if (query) {
-    items = items.filter((voice) => resultIds.has(voice.id) || matchesVoiceQuery(voice, query));
+    items = items.filter((voice) => includeVoice(voice, query, resultIds));
   }
-  return favoriteFilter
-    ? items.filter((voice) => favorites.some((item) => item.id === voice.id))
-    : items;
+  return items;
 }

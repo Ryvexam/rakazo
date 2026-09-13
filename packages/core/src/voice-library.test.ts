@@ -44,7 +44,16 @@ describe("visibleVoiceLibraryItems", () => {
       { id: "beta", label: "Beta Voice" },
     ];
     const items = visibleVoiceLibraryItems(serverHits, favorites, "  ", true);
-    expect(items.map((v) => v.id).sort()).toEqual(["alpha", "author-fav", "fav-only"]);
+    expect(items.map((v) => v.id)).toEqual(["fav-only", "alpha", "author-fav"]);
+  });
+
+  it("keeps saved favorite order on the Favorites tab", () => {
+    const serverHits: VoiceLibraryItem[] = [
+      { id: "author-fav", label: "Quiet Night" },
+      { id: "alpha", label: "Alpha Voice" },
+    ];
+    const items = visibleVoiceLibraryItems(serverHits, favorites, "", true);
+    expect(items.map((v) => v.id)).toEqual(["fav-only", "alpha", "author-fav"]);
   });
 
   it("applies Favorites-tab filter after the query", () => {
