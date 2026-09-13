@@ -104,6 +104,14 @@ export function parseOpportunityMetadata(notes: string): OpportunityMetadata | n
   };
 }
 
+export function opportunityRationale(notes: string): string {
+  const markerIndex = notes.indexOf(OPPORTUNITY_MARKER);
+  if (markerIndex < 0) return notes.trim();
+  const afterMarker = notes.slice(markerIndex + OPPORTUNITY_MARKER.length);
+  const rationaleStart = afterMarker.indexOf("\n\n");
+  return rationaleStart < 0 ? "" : afterMarker.slice(rationaleStart + 2).trim();
+}
+
 export function buildUserPromotedGoalNotes(itemId: string, notes: string): string {
   const metadata = parseOpportunityMetadata(notes);
   return [
@@ -156,7 +164,7 @@ After completing a goal, or when no active goal exists, ask: "What product capab
 - Stay close to the original product intent. Do not drift into unrelated product areas.
 - Generate at most three worthwhile ideas per reflection. If there is no strong idea, create nothing and stop.
 - Rank ideas by user value first, then confidence, then effort. Do not prefer an easy idea merely because it is easy.
-- Every idea must use this notes header exactly, followed by a short human-readable rationale:
+- Every idea must use this notes header exactly, followed by a blank line and a short human-readable rationale:
 ${OPPORTUNITY_MARKER}
 sourceGoalId=<scratchpad goal id or none>
 depth=<1 for a user goal extension, otherwise parent depth + 1>
