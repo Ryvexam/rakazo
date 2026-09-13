@@ -29,10 +29,6 @@ import { X } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
 import { rpc } from "../../lib/rpc";
 
-const ScratchpadSection = lazy(() =>
-  import("../ScratchpadSection").then((module) => ({ default: module.ScratchpadSection })),
-);
-
 const KnowledgeSection = lazy(() =>
   import("../KnowledgeSection").then((module) => ({ default: module.KnowledgeSection })),
 );
@@ -380,7 +376,6 @@ export function BotSettings({
         </summary>
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
         <Suspense fallback={null}>
-          <ScratchpadSection botId={bot.id} />
           {advancedOpened ? (
             <KnowledgeSection botId={bot.id} onSkillsChange={onSkillsChange} />
           ) : null}
