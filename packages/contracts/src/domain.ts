@@ -353,6 +353,17 @@ export const UpdateBotInput = z
         path: ["voiceLabel"],
       });
     }
+    if (
+      value.voiceProvider !== undefined &&
+      value.voiceProvider !== null &&
+      value.voiceId === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A voice id is required when a voice provider is set",
+        path: ["voiceId"],
+      });
+    }
     const providerProvided = value.modelProvider !== undefined;
     const modelProvided = value.modelId !== undefined;
     if (!providerProvided && !modelProvided) return;
