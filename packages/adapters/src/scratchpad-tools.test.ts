@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AUTONOMOUS_GOAL_MARKER,
+  AUTONOMY_PROMPT_MARKER,
+  OPPORTUNITY_MARKER,
+} from "@rakazo/core";
+import {
   addScratchpadItemFromTool,
   completeScratchpadItemFromTool,
   listScratchpadItems,
@@ -159,7 +164,145 @@ describe("scratchpad tools store", () => {
     );
     expect(result.items).toHaveLength(1);
   });
+
+  it("refuses autonomous create when the daily goal limit is reached", async () => {
+    const create = vi.fn();
+    const today = new Date();
+    const autonomousAt = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 8, 0, 0),
+    ).toISOString();
+    const prisma = {
+      routine: {
+        findMany: vi.fn(async () => [{ prompt: autonomyPrompt({ maxGoalsPerDay: 1, maxChainDepth: 3 }) }]),
+      },
+      scratchpadItem: {
+        findMany: vi.fn(async () => [
+          row({
+            id: "existing",
+            title: "Already autonomous",
+            status: "open",
+            notes: `${AUTONOMOUS_GOAL_MARKER}\nsourceIdeaId=old\ndepth=1\nautonomousAt=${autonomousAt}`,
+          }),
+        ]),
+        create,
+      },
+    };
+
+    const result = await addScratchpadItemFromTool(
+      { prisma: prisma as never },
+      {
+        spaceId: "ws",
+        botId: "bot",
+        userId: "user",
+        title: "Another autonomous goal",
+        status: "open",
+        notes: `${AUTONOMOUS_GOAL_MARKER}\ndepth=1`,
+      },
+    );
+
+    expect(result).toEqual({ error: "Autonomy daily goal limit is 1." });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("refuses autonomous promote when idea depth exceeds the chain limit", async () => {
+    const existing = row({
+      id: "idea-1",
+      title: "[idea] Voice speed",
+      status: "parked",
+      notes: `${OPPORTUNITY_MARKER}\nsourceGoalId=goal-1\ndepth=3\nvalue=high\neffort=low\nconfidence=high\n\nAdd speed.`,
+    });
+    const update = vi.fn();
+    const prisma = {
+      routine: {
+        findMany: vi.fn(async () => [{ prompt: autonomyPrompt({ maxGoalsPerDay: 5, maxChainDepth: 2 }) }]),
+      },
+      scratchpadItem: {
+        findFirst: vi.fn(async () => existing),
+        findMany: vi.fn(async () => []),
+        update,
+      },
+    };
+
+    const result = await updateScratchpadItemFromTool(
+      { prisma: prisma as never },
+      {
+        spaceId: "ws",
+        botId: "bot",
+        userId: "user",
+        itemId: "idea-1",
+        title: "Voice speed",
+        status: "open",
+        notes: existing.notes,
+      },
+    );
+
+    expect(result).toEqual({ error: "Autonomy goal chain depth limit is 2." });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("stamps autonomous lineage when promoting an idea under the limits", async () => {
+    const existing = row({
+      id: "idea-1",
+      title: "[idea] Voice preview",
+      status: "parked",
+      notes: `${OPPORTUNITY_MARKER}\nsourceGoalId=goal-1\ndepth=1\nvalue=high\neffort=low\nconfidence=high\n\nAdd preview.`,
+    });
+    const update = vi.fn(async ({ data }: { data: Record<string, unknown> }) =>
+      row({
+        ...existing,
+        title: String(data.title ?? existing.title),
+        status: String(data.status ?? existing.status),
+        notes: String(data.notes ?? existing.notes),
+      }),
+    );
+    const prisma = {
+      routine: {
+        findMany: vi.fn(async () => [{ prompt: autonomyPrompt({ maxGoalsPerDay: 3, maxChainDepth: 2 }) }]),
+      },
+      scratchpadItem: {
+        findFirst: vi.fn(async () => existing),
+        findMany: vi.fn(async () => []),
+        update,
+      },
+    };
+
+    const result = await updateScratchpadItemFromTool(
+      { prisma: prisma as never },
+      {
+        spaceId: "ws",
+        botId: "bot",
+        userId: "user",
+        itemId: "idea-1",
+        title: "Voice preview",
+        status: "open",
+      },
+    );
+
+    expect(result).toEqual({
+      item: expect.objectContaining({
+        title: "Voice preview",
+        status: "open",
+        notes: expect.stringContaining(AUTONOMOUS_GOAL_MARKER),
+      }),
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "idea-1" },
+      data: expect.objectContaining({
+        title: "Voice preview",
+        status: "open",
+        notes: expect.stringContaining("autonomousAt="),
+      }),
+    });
+  });
 });
+
+function autonomyPrompt(limits: { maxGoalsPerDay: number; maxChainDepth: number }) {
+  return `${AUTONOMY_PROMPT_MARKER}
+MODE=autonomous
+MAX_AUTONOMOUS_GOALS_PER_DAY=${limits.maxGoalsPerDay}
+MAX_GOAL_CHAIN_DEPTH=${limits.maxChainDepth}
+`;
+}
 
 function row(partial: {
   id: string;
