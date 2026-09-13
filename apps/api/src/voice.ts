@@ -10,7 +10,7 @@ import {
   NoVoiceConfigured,
   voiceCatalogEntry,
 } from "@rakazo/adapters";
-import type { Actor, VoiceCredential, VoiceStatus } from "@rakazo/contracts";
+import type { Actor, VoiceCredential, VoiceInfo, VoiceStatus } from "@rakazo/contracts";
 import { toUtterances } from "@rakazo/core";
 import {
   deleteUnreferencedCredentialSecret,
@@ -37,6 +37,47 @@ const SPEAK_TIMEOUT_MS = 60_000;
 export const MAX_SPEAK_REQUEST_BYTES = 16 * 1024;
 export const MAX_TRANSCRIBE_REQUEST_BYTES = 4 * Math.ceil(MAX_TRANSCRIBE_BYTES / 3) + 1024;
 
+/** Filter and page a full listVoices catalog for providers without searchVoices. */
+export function pageListedVoices(
+  items: VoiceInfo[],
+  options: { query?: string; page: number; pageSize: number; language?: string },
+): { items: VoiceInfo[]; nextPage?: number } {
+  const query = options.query?.trim().toLowerCase();
+  const language = options.language?.trim().toLowerCase();
+  let filtered = items;
+  if (query) {
+    filtered = filtered.filter((voice) => {
+      const haystack = [voice.id, voice.label, voice.description, voice.author?.name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+  if (language) {
+    filtered = filtered.filter((voice) =>
+      voice.languages?.some((entry) => entry.toLowerCase().includes(language)),
+    );
+  }
+  const start = (options.page - 1) * options.pageSize;
+  const pageItems = filtered.slice(start, start + options.pageSize);
+  const nextPage = start + options.pageSize < filtered.length ? options.page + 1 : undefined;
+  return nextPage === undefined ? { items: pageItems } : { items: pageItems, nextPage };
+}
+
+/** Keep a prior label only when reconnecting without changing the voice id. */
+export function resolvePersistedVoiceLabel(input: {
+  explicitVoiceId: string;
+  lookedUpLabel: string | null;
+  previousVoiceId?: string;
+  previousVoiceLabel?: string | null;
+}): string | null {
+  const changed =
+    Boolean(input.explicitVoiceId) && input.explicitVoiceId !== (input.previousVoiceId ?? "");
+  if (changed) return input.lookedUpLabel;
+  return input.lookedUpLabel ?? input.previousVoiceLabel ?? null;
+}
+
 export function voiceContext(actor: Actor, signal?: AbortSignal): AdapterContext {
   return {
     operationId: "voice",
@@ -51,7 +92,32 @@ export function catalogEntry(provider: string) {
   return voiceCatalogEntry(provider);
 }
 
-export function toVoiceStatus(cred: { provider: string; voiceId: string } | null): VoiceStatus {
+/** Resolve a persisted model to the provider default without forwarding stale values. */
+function configuredSynthesisModel(provider: string, modelId: string): string {
+  const entry = catalogEntry(provider);
+  if (!entry?.synthesisModels?.length) return "";
+  return entry.synthesisModels.some((model) => model.id === modelId)
+    ? modelId
+    : (entry.defaultSynthesisModelId ?? entry.synthesisModels[0]?.id ?? "");
+}
+
+/** Validate an explicitly requested synthesis model against the provider catalog. */
+export function validateVoiceSynthesisModel(
+  provider: string,
+  modelId: string | undefined,
+): string | undefined {
+  if (modelId === undefined) return undefined;
+  const selected = modelId.trim();
+  const entry = catalogEntry(provider);
+  if (!entry?.synthesisModels?.some((model) => model.id === selected)) {
+    throw new ORPCError("BAD_REQUEST", { message: "Unknown voice synthesis model." });
+  }
+  return selected;
+}
+
+export function toVoiceStatus(
+  cred: { provider: string; voiceId: string; modelId: string; voiceLabel?: string | null } | null,
+): VoiceStatus {
   const entry = cred ? catalogEntry(cred.provider) : undefined;
   return {
     configured: Boolean(cred),
@@ -59,6 +125,8 @@ export function toVoiceStatus(cred: { provider: string; voiceId: string } | null
     transcribe: Boolean(entry?.transcribe && cred),
     provider: cred?.provider ?? null,
     voiceId: cred?.voiceId ?? "",
+    modelId: cred ? configuredSynthesisModel(cred.provider, cred.modelId) : "",
+    voiceLabel: cred?.voiceLabel ?? null,
   };
 }
 
@@ -67,6 +135,8 @@ export function toVoiceCredential(row: {
   provider: string;
   isDefault: boolean;
   voiceId: string;
+  modelId: string;
+  voiceLabel?: string | null;
 }): VoiceCredential {
   return {
     id: row.id,
@@ -74,6 +144,8 @@ export function toVoiceCredential(row: {
     hasKey: true,
     isDefault: row.isDefault,
     voiceId: row.voiceId,
+    modelId: configuredSynthesisModel(row.provider, row.modelId),
+    voiceLabel: row.voiceLabel ?? null,
     transcribe: Boolean(catalogEntry(row.provider)?.transcribe),
   };
 }
@@ -99,20 +171,33 @@ export async function resolveVoiceTarget(
   actor: Actor,
   input: { botId?: string; voiceId?: string },
 ) {
-  let botVoiceId: string | null = null;
+  let botVoice: {
+    voiceId: string | null;
+    voiceProvider: string | null;
+    voiceModelId: string | null;
+    voiceLabel: string | null;
+  } | null = null;
   if (input.botId) {
     const bot = await deps.prisma.bot.findFirst({
       where: { id: input.botId, spaceId: actor.spaceId, userId: actor.userId },
-      select: { voiceId: true },
+      select: { voiceId: true, voiceProvider: true, voiceModelId: true, voiceLabel: true },
     });
     if (!bot) throw new IsolationError();
-    botVoiceId = bot.voiceId;
+    botVoice = bot;
   }
-  const loaded = await loadDefaultVoiceCredential(deps, actor);
+  const loaded = await loadVoiceCredential(deps, actor, botVoice?.voiceProvider ?? undefined);
   if (!loaded) throw new NoVoiceConfigured("key");
-  const voiceId = input.voiceId || botVoiceId || loaded.cred.voiceId;
+  const voiceId = input.voiceId || botVoice?.voiceId || loaded.cred.voiceId;
   if (!voiceId) throw new NoVoiceConfigured("voice");
-  return { ...loaded, voiceId };
+  return {
+    ...loaded,
+    voiceId,
+    voiceLabel: botVoice?.voiceLabel ?? loaded.cred.voiceLabel,
+    modelId: configuredSynthesisModel(
+      loaded.cred.provider,
+      botVoice?.voiceModelId ?? loaded.cred.modelId,
+    ),
+  };
 }
 
 export async function persistVoiceCredential(
@@ -122,6 +207,7 @@ export async function persistVoiceCredential(
     provider: string;
     plaintext: string;
     voiceId?: string;
+    modelId?: string;
     signal?: AbortSignal;
   },
 ): Promise<VoiceCredential> {
@@ -129,14 +215,17 @@ export async function persistVoiceCredential(
     throw new ORPCError("BAD_REQUEST", { message: "Unknown voice provider." });
   }
   const provider = createVoiceProvider(input.provider);
+  const requestedModelId = validateVoiceSynthesisModel(input.provider, input.modelId);
   const verified = await provider.verify(input.plaintext, voiceContext(actor, input.signal));
   if (!verified.ok) {
     throw new ORPCError("BAD_REQUEST", { message: verified.message ?? "That key was rejected." });
   }
   let voiceId = input.voiceId?.trim() ?? "";
+  let voiceLabel: string | null = null;
   if (!voiceId) {
     const voices = await provider.listVoices(input.plaintext, voiceContext(actor, input.signal));
     voiceId = voices[0]?.id ?? "";
+    voiceLabel = voices[0]?.label ?? null;
   }
   const stored = await deps.secrets.put(input.plaintext, voiceContext(actor, input.signal));
   const cred = await withSerializableRetry(() =>
@@ -179,7 +268,24 @@ export async function persistVoiceCredential(
             })
           : null;
         const selectedVoiceId = voiceId || previousPreference?.voiceId || "";
-        await selectSpaceVoicePreference(tx, actor, credential.id, selectedVoiceId);
+        const selectedVoiceLabel = resolvePersistedVoiceLabel({
+          explicitVoiceId: input.voiceId?.trim() ?? "",
+          lookedUpLabel: voiceLabel,
+          previousVoiceId: previousPreference?.voiceId,
+          previousVoiceLabel: previousPreference?.voiceLabel,
+        });
+        const selectedModelId =
+          requestedModelId ??
+          previousPreference?.modelId ??
+          configuredSynthesisModel(input.provider, "");
+        await selectSpaceVoicePreference(
+          tx,
+          actor,
+          credential.id,
+          selectedVoiceId,
+          selectedModelId,
+          selectedVoiceLabel,
+        );
         if (existing) {
           await deleteUnreferencedCredentialSecret(tx, {
             credentialKind: "voice",
@@ -187,7 +293,13 @@ export async function persistVoiceCredential(
             secretId: existing.secretId,
           });
         }
-        return { ...credential, isDefault: true, voiceId: selectedVoiceId };
+        return {
+          ...credential,
+          isDefault: true,
+          voiceId: selectedVoiceId,
+          modelId: selectedModelId,
+          voiceLabel: selectedVoiceLabel,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
@@ -227,6 +339,7 @@ export async function synthesizeVoice(
     {
       text,
       voiceId: target.voiceId,
+      modelId: target.modelId,
       apiKey: target.apiKey,
       signal: input.signal,
     },

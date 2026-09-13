@@ -44,6 +44,7 @@ import {
   isComputerScreenUnavailable,
   isSandboxGoneError,
   isScratchpadStatus,
+  isVoiceProviderId,
   listPiCatalog,
   listScratchpadItems,
   McpOAuthBroker,
@@ -105,16 +106,20 @@ import {
   createRepos,
   createSpaceForMember,
   createThreadMessageInTransaction,
+  createVoiceFavorite,
   deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
+  deleteVoiceFavorite,
   findDefaultModelCredential,
   findDefaultVoiceCredential,
   findModelCredential,
   findSpaceMemoryConfig,
+  findVoiceCredential,
   formatMessagingLinkCode,
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listVoiceFavorites,
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
@@ -123,6 +128,7 @@ import {
   parseComputerMode,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
+  reorderVoiceFavorites,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
   SpaceLimitError,
@@ -132,6 +138,8 @@ import {
   selectSpaceVoicePreference,
   type ThreadEvents,
   touchGroupUpdatedAt,
+  updateVoiceFavorite,
+  VoiceFavoriteAlreadyExistsError,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
@@ -189,10 +197,12 @@ import {
   listVoiceCatalog,
   loadDefaultVoiceCredential,
   loadVoiceCredential,
+  pageListedVoices,
   persistVoiceCredential,
   prepareVoice,
   toVoiceCredential,
   toVoiceStatus,
+  validateVoiceSynthesisModel,
   voiceContext,
 } from "./voice.js";
 
@@ -939,6 +949,10 @@ export function createRouter(deps: RouterDeps) {
             modelProvider: source.modelProvider,
             modelId: source.modelId,
             thinkingLevel: source.thinkingLevel,
+            voiceId: source.voiceId,
+            voiceProvider: source.voiceProvider,
+            voiceModelId: source.voiceModelId,
+            voiceLabel: source.voiceLabel,
           })
           .catch((error: unknown) => {
             throw mapSpaceLifecycleError(error);
@@ -996,6 +1010,79 @@ export function createRouter(deps: RouterDeps) {
           );
           if (!inCatalog && credential.defaultModel !== input.modelId) {
             throw new ORPCError("BAD_REQUEST", { message: "Unknown model for that provider" });
+          }
+        }
+        const voiceUpdateRequested =
+          input.voiceId !== undefined ||
+          input.voiceProvider !== undefined ||
+          input.voiceModelId !== undefined ||
+          input.voiceLabel !== undefined;
+        let voiceData: {
+          voiceId: string | null;
+          voiceProvider: string | null;
+          voiceModelId: string | null;
+          voiceLabel: string | null;
+        } = {
+          voiceId: existing.voiceId ?? null,
+          voiceProvider: existing.voiceProvider ?? null,
+          voiceModelId: existing.voiceModelId ?? null,
+          voiceLabel: existing.voiceLabel ?? null,
+        };
+        if (voiceUpdateRequested) {
+          // voiceId: null (or an explicit provider clear) is a full voice reset.
+          // Do not fall through to `input.voiceId ?? existing.voiceId`, which would
+          // restore a cleared assignment, and do not invent a default provider when
+          // the client sent voiceProvider: null.
+          const resetVoice = input.voiceId === null || input.voiceProvider === null;
+          if (resetVoice) {
+            voiceData = {
+              voiceId: null,
+              voiceProvider: null,
+              voiceModelId: null,
+              voiceLabel: null,
+            };
+          } else {
+            const voiceId = input.voiceId !== undefined ? input.voiceId : existing.voiceId;
+            let effectiveProvider =
+              input.voiceProvider !== undefined ? input.voiceProvider : existing.voiceProvider;
+            if (!effectiveProvider && voiceId) {
+              const defaultVoice = await findDefaultVoiceCredential(deps.prisma, context.actor);
+              effectiveProvider = defaultVoice?.provider ?? null;
+            }
+            if (!effectiveProvider || !voiceId) {
+              throw new ORPCError("BAD_REQUEST", {
+                message: "Connect a voice provider and select a voice first.",
+              });
+            }
+            if (!isVoiceProviderId(effectiveProvider)) {
+              throw new ORPCError("BAD_REQUEST", { message: "Unknown voice provider." });
+            }
+            const credential = await findVoiceCredential(
+              deps.prisma,
+              context.actor,
+              effectiveProvider,
+            );
+            if (!credential) {
+              throw new ORPCError("BAD_REQUEST", { message: "Connect that voice provider first." });
+            }
+            const modelId =
+              input.voiceModelId !== undefined ? input.voiceModelId : existing.voiceModelId;
+            const validatedModelId = validateVoiceSynthesisModel(
+              effectiveProvider,
+              modelId ?? undefined,
+            );
+            const voiceChanged = input.voiceId !== undefined && input.voiceId !== existing.voiceId;
+            voiceData = {
+              voiceId,
+              voiceProvider: effectiveProvider,
+              voiceModelId: validatedModelId ?? modelId ?? null,
+              voiceLabel:
+                input.voiceLabel !== undefined
+                  ? input.voiceLabel
+                  : voiceChanged
+                    ? null
+                    : (existing.voiceLabel ?? null),
+            };
           }
         }
         const thinkingLevel = input.thinkingLevel;
@@ -1061,7 +1148,7 @@ export function createRouter(deps: RouterDeps) {
             pinned: input.pinned,
             memoryScope: input.memoryScope,
             sectionId: input.sectionId,
-            voiceId: input.voiceId,
+            ...(voiceUpdateRequested ? voiceData : {}),
             autoSpeak: input.autoSpeak,
             ...(input.modelProvider !== undefined
               ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
@@ -4560,6 +4647,8 @@ export function createRouter(deps: RouterDeps) {
             ...row,
             isDefault: preference?.isDefault ?? false,
             voiceId: preference?.voiceId ?? "",
+            modelId: preference?.modelId ?? "",
+            voiceLabel: preference?.voiceLabel ?? null,
           });
         });
       }),
@@ -4568,35 +4657,48 @@ export function createRouter(deps: RouterDeps) {
           provider: input.provider,
           plaintext: input.apiKey,
           voiceId: input.voiceId,
+          modelId: input.modelId,
           signal: context.signal,
         }),
       ),
       setVoice: authed.voice.setVoice.handler(async ({ context, input }) => {
+        const loaded = input.provider
+          ? await loadVoiceCredential(deps, context.actor, input.provider)
+          : await loadDefaultVoiceCredential(deps, context.actor);
+        if (!loaded) {
+          throw new ORPCError("BAD_REQUEST", { message: "Connect a voice provider first." });
+        }
+        const modelId = validateVoiceSynthesisModel(loaded.cred.provider, input.modelId);
+        let voiceLabel: string | null | undefined =
+          input.voiceLabel !== undefined ? input.voiceLabel?.trim() || null : undefined;
+        if (voiceLabel === undefined) {
+          try {
+            const provider = createVoiceProvider(loaded.cred.provider);
+            const adapterContext = voiceContext(context.actor, context.signal);
+            const resolved = provider.getVoice
+              ? (await provider.getVoice(loaded.apiKey, input.voiceId, adapterContext))?.label
+              : (await provider.listVoices(loaded.apiKey, adapterContext)).find(
+                  (voice) => voice.id === input.voiceId,
+                )?.label;
+            // Keep the stored label when lookup misses (e.g. model-only updates).
+            if (resolved) voiceLabel = resolved;
+          } catch {
+            // Provider outage must not block model-only preference updates.
+          }
+        }
         const cred = await withSerializableRetry(() =>
           deps.prisma.$transaction(
             async (tx) => {
-              const found = input.provider
-                ? await tx.userVoiceCredential.findFirst({
-                    where: { userId: context.actor.userId, provider: input.provider },
-                    orderBy: newestVoiceCredentialOrder,
-                  })
-                : (
-                    await tx.spaceVoicePreference.findFirst({
-                      where: {
-                        userId: context.actor.userId,
-                        spaceId: context.actor.spaceId,
-                        isDefault: true,
-                      },
-                      include: { credential: true },
-                      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-                    })
-                  )?.credential;
-              if (!found) {
-                throw new ORPCError("BAD_REQUEST", { message: "Connect a voice provider first." });
-              }
               // Picking a voice also makes its provider the one speak/transcribe use.
-              await selectSpaceVoicePreference(tx, context.actor, found.id, input.voiceId);
-              return { ...found, voiceId: input.voiceId, isDefault: true };
+              const preference = await selectSpaceVoicePreference(
+                tx,
+                context.actor,
+                loaded.cred.id,
+                input.voiceId,
+                modelId,
+                voiceLabel,
+              );
+              return { ...loaded.cred, ...preference, isDefault: true };
             },
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           ),
@@ -4617,6 +4719,92 @@ export function createRouter(deps: RouterDeps) {
           voiceContext(context.actor, context.signal),
         );
       }),
+      search: authed.voice.search.handler(async ({ context, input }) => {
+        const row = input.provider
+          ? await loadVoiceCredential(deps, context.actor, input.provider)
+          : await loadDefaultVoiceCredential(deps, context.actor);
+        if (!row) return { items: [] };
+        const provider = createVoiceProvider(row.cred.provider);
+        if (!provider.searchVoices) {
+          const listed = await provider.listVoices(
+            row.apiKey,
+            voiceContext(context.actor, context.signal),
+          );
+          return pageListedVoices(listed, {
+            query: input.query,
+            page: input.page,
+            pageSize: input.pageSize,
+            language: input.language,
+          });
+        }
+        const contextForSearch = voiceContext(context.actor, context.signal);
+        const pages = await Promise.all(
+          (["owned", "public"] as const).map((scope) =>
+            provider.searchVoices!(
+              row.apiKey,
+              {
+                scope,
+                query: input.query,
+                page: input.page,
+                pageSize: input.pageSize,
+                language: input.language,
+              },
+              contextForSearch,
+            ),
+          ),
+        );
+        const seen = new Set<string>();
+        const items = pages
+          .flatMap((page) => page.items)
+          .filter((item) => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          });
+        const nextPage = pages
+          .map((page) => page.nextPage)
+          .filter((page): page is number => page !== undefined)
+          .sort((a, b) => a - b)[0];
+        return {
+          items,
+          ...(nextPage === undefined ? {} : { nextPage }),
+          windowLimited: pages.some((page) => page.windowLimited),
+        };
+      }),
+      favorites: {
+        list: authed.voice.favorites.list.handler(async ({ context, input }) =>
+          listVoiceFavorites(deps.prisma, context.actor, input),
+        ),
+        create: authed.voice.favorites.create.handler(async ({ context, input }) => {
+          try {
+            return await createVoiceFavorite(deps.prisma, context.actor, input);
+          } catch (error) {
+            if (error instanceof VoiceFavoriteAlreadyExistsError) {
+              throw new ORPCError("CONFLICT", { message: error.message });
+            }
+            throw error;
+          }
+        }),
+        update: authed.voice.favorites.update.handler(async ({ context, input }) => {
+          try {
+            return await updateVoiceFavorite(deps.prisma, context.actor, input);
+          } catch (error) {
+            if (error instanceof VoiceFavoriteAlreadyExistsError) {
+              throw new ORPCError("CONFLICT", { message: error.message });
+            }
+            throw error;
+          }
+        }),
+        delete: authed.voice.favorites.delete.handler(async ({ context, input }) =>
+          deleteVoiceFavorite(deps.prisma, context.actor, input.id),
+        ),
+        reorder: authed.voice.favorites.reorder.handler(async ({ context, input }) =>
+          reorderVoiceFavorites(deps.prisma, context.actor, input.favoriteIds),
+        ),
+        search: authed.voice.favorites.search.handler(async ({ context, input }) =>
+          listVoiceFavorites(deps.prisma, context.actor, input),
+        ),
+      },
       prepare: authed.voice.prepare.handler(async ({ context, input }) =>
         prepareVoice(deps, context.actor, input),
       ),

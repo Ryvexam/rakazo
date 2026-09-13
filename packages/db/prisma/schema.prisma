@@ -30,6 +30,7 @@ model User {
   createdSpaces               Space[]                      @relation("SpaceCreator")
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
+  voiceFavorites             VoiceFavorite[]
 
   @@unique([email])
   @@map("user")
@@ -190,6 +191,7 @@ model Space {
   botSecrets BotSecret[]
   externalConversations       ExternalConversation[]
   agentSecrets                AgentSecret[]
+  voiceFavorites              VoiceFavorite[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -307,6 +309,8 @@ model SpaceVoicePreference {
   credentialId String
   credential   UserVoiceCredential @relation(fields: [credentialId, userId], references: [id, userId], onDelete: Cascade)
   voiceId      String              @default("")
+  modelId      String              @default("")
+  voiceLabel   String?
   isDefault    Boolean             @default(false)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
@@ -316,6 +320,24 @@ model SpaceVoicePreference {
   @@index([credentialId])
   // Partial unique index space_voice_preferences_default_key is created in SQL.
   @@map("space_voice_preferences")
+}
+
+model VoiceFavorite {
+  id         String   @id @default(cuid())
+  spaceId    String
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String
+  voiceId    String
+  label      String?
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([spaceId, userId, provider, voiceId])
+  @@index([spaceId, userId, position, createdAt])
+  @@map("voice_favorites")
 }
 
 model Bot {
@@ -347,6 +369,9 @@ model Bot {
   computer          Computer?         @relation(fields: [computerId], references: [id], onDelete: SetNull)
   computerSwitching Boolean           @default(false)
   voiceId           String?
+  voiceProvider     String?
+  voiceModelId      String?
+  voiceLabel        String?
   autoSpeak         Boolean           @default(false)
   modelProvider     String?
   modelId           String?

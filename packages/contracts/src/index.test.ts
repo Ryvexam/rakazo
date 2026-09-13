@@ -170,6 +170,18 @@ describe("contracts", () => {
     ).toBe(true);
   });
 
+  it("accepts voiceId null as a voice clear without requiring the other voice fields", () => {
+    expect(UpdateBotInput.safeParse({ botId: "bot-1", voiceId: null }).success).toBe(true);
+    expect(UpdateBotInput.safeParse({ botId: "bot-1", voiceProvider: null }).success).toBe(true);
+    expect(
+      UpdateBotInput.safeParse({ botId: "bot-1", voiceProvider: null, voiceId: "voice-1" }).success,
+    ).toBe(false);
+    expect(
+      UpdateBotInput.safeParse({ botId: "bot-1", voiceProvider: "fish-audio", voiceId: undefined })
+        .success,
+    ).toBe(false);
+  });
+
   it("normalizes group names and rejects duplicate members", () => {
     expect(CreateGroupInput.parse({ name: "  Draft team  ", botIds: ["bot-1", "bot-2"] })).toEqual({
       name: "Draft team",

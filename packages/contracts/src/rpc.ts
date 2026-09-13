@@ -69,7 +69,15 @@ import {
   UsageRecordSchema,
   VoiceCatalogEntrySchema,
   VoiceCredentialSchema,
+  VoiceFavoriteCreateInputSchema,
+  VoiceFavoriteListInputSchema,
+  VoiceFavoriteReorderInputSchema,
+  VoiceFavoriteSchema,
+  VoiceFavoriteSearchInputSchema,
+  VoiceFavoriteUpdateInputSchema,
   VoiceInfoSchema,
+  VoiceSearchInputSchema,
+  VoiceSearchResultSchema,
   VoiceStatusSchema,
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
@@ -732,15 +740,32 @@ export const appContract = {
           provider: z.string(),
           apiKey: z.string().min(8),
           voiceId: z.string().max(120).optional(),
+          modelId: z.string().max(120).optional(),
         }),
       )
       .output(VoiceCredentialSchema),
     setVoice: oc
-      .input(z.object({ voiceId: z.string().min(1).max(120), provider: z.string().optional() }))
+      .input(
+        z.object({
+          voiceId: z.string().min(1).max(120),
+          modelId: z.string().max(120).optional(),
+          provider: z.string().optional(),
+          voiceLabel: z.string().trim().max(160).nullable().optional(),
+        }),
+      )
       .output(VoiceStatusSchema),
     voices: oc
       .input(z.object({ provider: z.string().optional() }))
       .output(z.array(VoiceInfoSchema)),
+    search: oc.input(VoiceSearchInputSchema).output(VoiceSearchResultSchema),
+    favorites: {
+      list: oc.input(VoiceFavoriteListInputSchema).output(z.array(VoiceFavoriteSchema)),
+      create: oc.input(VoiceFavoriteCreateInputSchema).output(VoiceFavoriteSchema),
+      update: oc.input(VoiceFavoriteUpdateInputSchema).output(VoiceFavoriteSchema),
+      delete: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
+      reorder: oc.input(VoiceFavoriteReorderInputSchema).output(z.array(VoiceFavoriteSchema)),
+      search: oc.input(VoiceFavoriteSearchInputSchema).output(z.array(VoiceFavoriteSchema)),
+    },
     prepare: oc
       .input(
         z.object({

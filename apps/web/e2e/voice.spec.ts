@@ -30,6 +30,9 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
 
   await openUserSettings(page, "voice");
   await expect(page.getByTestId("voice-settings")).toBeVisible();
+  await page.getByRole("button", { name: /Fish Audio/ }).click();
+  await expect(page.getByLabel("Model", { exact: true })).toHaveValue("s2.1-pro");
+  await captureScreenshot(page, testInfo, "voice-fish-audio-model");
   await page.getByRole("button", { name: /Scripted/ }).click();
   const apiKeyInput = page.getByPlaceholder(/Paste your API key/);
   await expect(apiKeyInput).toHaveAttribute("autocomplete", "new-password");
@@ -52,6 +55,16 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   );
   expect(credentials).toEqual([expect.objectContaining({ hasKey: true, provider: "scripted" })]);
   expect(JSON.stringify(credentials)).not.toContain("fake-scripted-voice-key");
+
+  // Voice library + bot assignment chrome from this PR (no live Fish key required).
+  await expect(page.getByTestId("voice-library")).toBeVisible();
+  await expect(page.getByLabel("Search voices", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Favorites", exact: true }).click();
+  await captureScreenshot(page, testInfo, "voice-library-favorites");
+  await page.getByRole("button", { name: "All", exact: true }).click();
+  await expect(page.getByTestId("fish-bot-voices")).toBeVisible();
+  await expect(page.getByTestId("fish-bot-voices")).toContainText("Chief");
+  await captureScreenshot(page, testInfo, "voice-bot-assignment");
 
   await page.getByRole("button", { name: "Close voice settings" }).click();
 

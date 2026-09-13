@@ -61,6 +61,9 @@ export const BotSchema = z.object({
   updatedAt: z.string(),
   createdAt: z.string(),
   voiceId: z.string().nullable(),
+  voiceProvider: z.string().nullable(),
+  voiceModelId: z.string().nullable(),
+  voiceLabel: z.string().nullable(),
   autoSpeak: z.boolean(),
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
@@ -314,6 +317,9 @@ export const UpdateBotInput = z
     memoryScope: MemoryScopeSchema.nullable().optional(),
     sectionId: Id.nullable().optional(),
     voiceId: z.string().max(120).nullable().optional(),
+    voiceProvider: z.string().trim().min(1).max(80).nullable().optional(),
+    voiceModelId: z.string().trim().min(1).max(120).nullable().optional(),
+    voiceLabel: z.string().trim().max(160).nullable().optional(),
     autoSpeak: z.boolean().optional(),
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
@@ -322,6 +328,42 @@ export const UpdateBotInput = z
     teamChatRules: z.string().max(TEAM_CHAT_RULES_MAX_LENGTH).optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.voiceProvider === null && value.voiceId !== undefined && value.voiceId !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A cleared voice provider cannot be combined with a voice id",
+        path: ["voiceId"],
+      });
+    }
+    if (
+      value.voiceId === null &&
+      value.voiceProvider !== undefined &&
+      value.voiceProvider !== null
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A voice id is required when a voice provider is set",
+        path: ["voiceId"],
+      });
+    }
+    if (value.voiceId === null && value.voiceLabel !== undefined && value.voiceLabel !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A voice label requires a voice id",
+        path: ["voiceLabel"],
+      });
+    }
+    if (
+      value.voiceProvider !== undefined &&
+      value.voiceProvider !== null &&
+      value.voiceId === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A voice id is required when a voice provider is set",
+        path: ["voiceId"],
+      });
+    }
     const providerProvided = value.modelProvider !== undefined;
     const modelProvided = value.modelId !== undefined;
     if (!providerProvided && !modelProvided) return;
@@ -1025,6 +1067,16 @@ export const VoiceCatalogEntrySchema = z.object({
   name: z.string(),
   description: z.string(),
   transcribe: z.boolean(),
+  synthesisModels: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional(),
+  defaultSynthesisModelId: z.string().optional(),
 });
 export type VoiceCatalogEntry = z.infer<typeof VoiceCatalogEntrySchema>;
 
@@ -1032,8 +1084,28 @@ export const VoiceInfoSchema = z.object({
   id: z.string(),
   label: z.string(),
   description: z.string().optional(),
+  scope: z.enum(["public", "owned"]).optional(),
+  languages: z.array(z.string()).optional(),
+  author: z.object({ id: z.string().optional(), name: z.string().optional() }).optional(),
+  licensed: z.boolean().optional(),
 });
 export type VoiceInfo = z.infer<typeof VoiceInfoSchema>;
+
+export const VoiceSearchInputSchema = z.object({
+  provider: z.string().trim().min(1).max(80),
+  query: z.string().trim().max(200).optional(),
+  page: z.number().int().min(1).max(10_000).default(1),
+  pageSize: z.number().int().min(1).max(50).default(50),
+  language: z.string().trim().max(80).optional(),
+});
+export type VoiceSearchInput = z.infer<typeof VoiceSearchInputSchema>;
+
+export const VoiceSearchResultSchema = z.object({
+  items: z.array(VoiceInfoSchema),
+  nextPage: z.number().int().min(1).optional(),
+  windowLimited: z.boolean().optional(),
+});
+export type VoiceSearchResult = z.infer<typeof VoiceSearchResultSchema>;
 
 export const VoiceCredentialSchema = z.object({
   id: Id,
@@ -1041,6 +1113,8 @@ export const VoiceCredentialSchema = z.object({
   hasKey: z.boolean(),
   isDefault: z.boolean(),
   voiceId: z.string(),
+  modelId: z.string(),
+  voiceLabel: z.string().nullable().optional(),
   transcribe: z.boolean(),
 });
 export type VoiceCredential = z.infer<typeof VoiceCredentialSchema>;
@@ -1051,8 +1125,56 @@ export const VoiceStatusSchema = z.object({
   transcribe: z.boolean(),
   provider: z.string().nullable(),
   voiceId: z.string(),
+  modelId: z.string(),
+  voiceLabel: z.string().nullable().optional(),
 });
 export type VoiceStatus = z.infer<typeof VoiceStatusSchema>;
+
+export const VoiceFavoriteSchema = z.object({
+  id: Id,
+  spaceId: Id,
+  provider: z.string(),
+  voiceId: z.string(),
+  label: z.string().nullable(),
+  position: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type VoiceFavorite = z.infer<typeof VoiceFavoriteSchema>;
+
+export const VoiceFavoriteListInputSchema = z.object({
+  provider: z.string().trim().min(1).max(80).optional(),
+});
+export type VoiceFavoriteListInput = z.infer<typeof VoiceFavoriteListInputSchema>;
+
+export const VoiceFavoriteSearchInputSchema = z.object({
+  provider: z.string().trim().min(1).max(80).optional(),
+  query: z.string().trim().max(160),
+});
+export type VoiceFavoriteSearchInput = z.infer<typeof VoiceFavoriteSearchInputSchema>;
+
+export const VoiceFavoriteCreateInputSchema = z.object({
+  provider: z.string().trim().min(1).max(80),
+  voiceId: z.string().trim().min(1).max(200),
+  label: z.string().trim().max(160).nullable().optional(),
+});
+export type VoiceFavoriteCreateInput = z.infer<typeof VoiceFavoriteCreateInputSchema>;
+
+export const VoiceFavoriteUpdateInputSchema = z.object({
+  id: Id,
+  provider: z.string().trim().min(1).max(80).optional(),
+  voiceId: z.string().trim().min(1).max(200).optional(),
+  label: z.string().trim().max(160).nullable().optional(),
+});
+export type VoiceFavoriteUpdateInput = z.infer<typeof VoiceFavoriteUpdateInputSchema>;
+
+export const VoiceFavoriteReorderInputSchema = z.object({
+  favoriteIds: z
+    .array(Id)
+    .max(200)
+    .refine((ids) => new Set(ids).size === ids.length, { error: "favoriteIds must be distinct" }),
+});
+export type VoiceFavoriteReorderInput = z.infer<typeof VoiceFavoriteReorderInputSchema>;
 
 export const DeploymentSettingsSchema = z.object({
   ownerUserId: Id.nullable(),
