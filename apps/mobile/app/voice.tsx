@@ -72,39 +72,42 @@ export default function VoiceSettings() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async (nextProvider?: string) => {
-    const [nextCatalog, nextCredentials, nextStatus] = await Promise.all([
-      rpc<VoiceCatalogEntry[]>("voice/catalog"),
-      rpc<VoiceCredential[]>("voice/credentials"),
-      rpc<VoiceStatus>("voice/status"),
-    ]);
-    const nextBots = await rpc<VoiceBot[]>("bots/list").catch(() => []);
-    const selected = nextProvider || nextStatus.provider || nextCatalog[0]?.id || "";
-    setCatalog(nextCatalog);
-    setCredentials(nextCredentials);
-    setStatus(nextStatus);
-    setBots(nextBots);
-    setProvider(selected);
-    const cred = nextCredentials.find((entry) => entry.provider === selected);
-    const catalogEntry = nextCatalog.find((entry) => entry.id === selected);
-    setVoiceId(cred?.voiceId ?? "");
-    setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
-    if (cred) {
-      const listed = await searchVoiceLibrary(selected, "");
-      const activeVoice = cred.voiceId ?? "";
-      const withConfigured =
-        activeVoice && !listed.some((voice) => voice.id === activeVoice)
-          ? [{ id: activeVoice, label: t("Unavailable voice") }, ...listed]
-          : listed;
-      setVoices(withConfigured);
-      setVoiceResults(listed);
-      setFavorites(await loadFavoriteVoices(selected));
-    } else {
-      setVoices([]);
-      setVoiceResults([]);
-      setFavorites([]);
-    }
-  }, [t]);
+  const load = useCallback(
+    async (nextProvider?: string) => {
+      const [nextCatalog, nextCredentials, nextStatus] = await Promise.all([
+        rpc<VoiceCatalogEntry[]>("voice/catalog"),
+        rpc<VoiceCredential[]>("voice/credentials"),
+        rpc<VoiceStatus>("voice/status"),
+      ]);
+      const nextBots = await rpc<VoiceBot[]>("bots/list").catch(() => []);
+      const selected = nextProvider || nextStatus.provider || nextCatalog[0]?.id || "";
+      setCatalog(nextCatalog);
+      setCredentials(nextCredentials);
+      setStatus(nextStatus);
+      setBots(nextBots);
+      setProvider(selected);
+      const cred = nextCredentials.find((entry) => entry.provider === selected);
+      const catalogEntry = nextCatalog.find((entry) => entry.id === selected);
+      setVoiceId(cred?.voiceId ?? "");
+      setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
+      if (cred) {
+        const listed = await searchVoiceLibrary(selected, "");
+        const activeVoice = cred.voiceId ?? "";
+        const withConfigured =
+          activeVoice && !listed.some((voice) => voice.id === activeVoice)
+            ? [{ id: activeVoice, label: t("Unavailable voice") }, ...listed]
+            : listed;
+        setVoices(withConfigured);
+        setVoiceResults(listed);
+        setFavorites(await loadFavoriteVoices(selected));
+      } else {
+        setVoices([]);
+        setVoiceResults([]);
+        setFavorites([]);
+      }
+    },
+    [t],
+  );
 
   useFocusEffect(
     useCallback(() => {
