@@ -1,4 +1,4 @@
-import { AUTONOMOUS_GOAL_MARKER, AUTONOMY_PROMPT_MARKER, OPPORTUNITY_MARKER } from "@rakazo/core";
+import { AUTONOMOUS_GOAL_MARKER, AUTONOMY_PROMPT_MARKER, OPPORTUNITY_MARKER } from "@ryvoko/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   addScratchpadItemFromTool,

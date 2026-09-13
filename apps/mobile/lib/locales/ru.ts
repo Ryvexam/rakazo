@@ -1,4 +1,8 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Enter your current password, then confirm permanent deletion of your account and all associated data.": "Введите текущий пароль и подтвердите безвозвратное удаление аккаунта и всех связанных данных.",
+  "Model spend uses your provider keys.": "Расходы на модели оплачиваются вашими ключами провайдера.",
+  "Connect apps.": "Подключите приложения.",
+  "Choose your provider and active model": "Выберите провайдера и активную модель",
   "Bot: Autonomy": "Бот: Автономность",
   "Bot: Goals": "Бот: Цели",
   "Bot: New routine": "Бот: Новая рутина",
@@ -451,6 +455,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "Speak message": "Озвучить сообщение",
   Speak: "Озвучить",
   "Speak only": "Только озвучить",
+  "Speak replies aloud with ElevenLabs, OpenAI, Cartesia, or Fish Audio":
+    "Озвучивать ответы с помощью ElevenLabs, OpenAI, Cartesia или Fish Audio",
   Starting: "Запуск",
   "Starting…": "Запуск…",
   Stop: "Остановить",

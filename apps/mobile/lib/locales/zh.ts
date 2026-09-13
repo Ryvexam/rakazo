@@ -1,4 +1,8 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Connect apps.": "连接应用。",
+  "Enter your current password, then confirm permanent deletion of your account and all associated data.": "输入当前密码，然后确认永久删除账户及其所有相关数据。",
+  "Model spend uses your provider keys.": "模型费用使用你的提供商密钥。",
+  "Choose your provider and active model": "选择你的提供商和活动模型",
   "Bot: Autonomy": "机器人：自主运行",
   "Bot: Goals": "机器人：目标",
   "Bot: New routine": "机器人：新例程",
