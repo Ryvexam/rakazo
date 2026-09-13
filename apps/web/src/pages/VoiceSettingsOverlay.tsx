@@ -592,7 +592,7 @@ export function VoiceSettingsOverlay({
                     <div className="mt-2 divide-y divide-border rounded-xl border border-border">
                       {bots.map((bot) => {
                         const selectedVoice = bot.voiceId ?? "";
-                        const selectedVoiceInfo = voiceOptions.find(
+                        const selectedVoiceInfo = assignableVoiceOptions.find(
                           (voice) => voice.id === selectedVoice,
                         );
                         const botVoiceOptions =

@@ -432,6 +432,62 @@ describe("FishAudioVoiceProvider", () => {
     expect(result.windowLimited).toBe(true);
   });
 
+  it("stops pagination at SEARCH_MAX_PAGE even when Fish reports has_more", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            total: 1_000_000,
+            has_more: true,
+            items: [{ _id: "voice-1", title: "Voice 1", visibility: "public" }],
+          }),
+        ),
+      ),
+    );
+
+    const result = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "public", page: 10_000, pageSize: 30 },
+      ctx,
+    );
+
+    expect(result.nextPage).toBeUndefined();
+  });
+
+  it("rejects a private exact match for a public search", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (input: RequestInfo) => {
+        const url = String(input);
+        if (url.includes("/model/private-voice")) {
+          return new Response(
+            JSON.stringify({
+              _id: "private-voice",
+              title: "Private Voice",
+              visibility: "private",
+            }),
+          );
+        }
+        return new Response(JSON.stringify({ total: 0, has_more: false, items: [] }));
+      }),
+    );
+
+    const byId = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "public", voiceId: "private-voice" },
+      ctx,
+    );
+    expect(byId.items).toEqual([]);
+
+    const owned = await new FishAudioVoiceProvider().searchVoices!(
+      "sk-test",
+      { scope: "owned", voiceId: "private-voice" },
+      ctx,
+    );
+    expect(owned.items).toEqual([expect.objectContaining({ id: "private-voice", scope: "owned" })]);
+  });
+
   it("ends pagination on an empty page even when Fish reports has_more", async () => {
     vi.stubGlobal(
       "fetch",
@@ -491,7 +547,9 @@ describe("FishAudioVoiceProvider", () => {
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], has_more: false })))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ _id: "voice-123456", title: "Favorite" })),
+        new Response(
+          JSON.stringify({ _id: "voice-123456", title: "Favorite", visibility: "public" }),
+        ),
       );
     vi.stubGlobal("fetch", fetchMock);
 
