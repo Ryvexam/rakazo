@@ -201,10 +201,12 @@ export function VoiceSettingsOverlay({
     markPending("voice");
     setError(null);
     try {
+      const selectedVoice = assignableVoiceOptions.find((voice) => voice.id === nextVoiceId);
       await rpc.voice.setVoice({
         voiceId: nextVoiceId,
         modelId: modelId || undefined,
         provider: selected?.id,
+        voiceLabel: selectedVoice?.alias || selectedVoice?.label || null,
       });
       await refresh(selected?.id);
     } catch (err) {
@@ -426,7 +428,6 @@ export function VoiceSettingsOverlay({
                     {selected.synthesisModels.map((model) => (
                       <NativeSelectOption key={model.id} value={model.id}>
                         {model.label}
-                        {model.description ? ` · ${model.description}` : ""}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
@@ -504,8 +505,8 @@ export function VoiceSettingsOverlay({
                       className="mt-2"
                       value={voiceQuery}
                       onChange={(event) => setVoiceQuery(event.target.value)}
-                      placeholder={t`Search voices by name or ID`}
-                      aria-label={t`Search voices by name or ID`}
+                      placeholder={t`Search voices`}
+                      aria-label={t`Search voices`}
                     />
                     <div className="mt-2 divide-y divide-border rounded-xl border border-border">
                       {voiceLibraryPending ? (
@@ -531,7 +532,7 @@ export function VoiceSettingsOverlay({
                                 {voice.alias || voice.label}
                               </span>
                               <span className="block truncate text-[12px] text-muted-foreground">
-                                {voice.description || voice.label} · {voice.id}
+                                {voice.description || voice.label}
                               </span>
                             </button>
                             <Button

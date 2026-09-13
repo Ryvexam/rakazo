@@ -4659,38 +4659,39 @@ export function createRouter(deps: RouterDeps) {
         }),
       ),
       setVoice: authed.voice.setVoice.handler(async ({ context, input }) => {
+        const loaded = input.provider
+          ? await loadVoiceCredential(deps, context.actor, input.provider)
+          : await loadDefaultVoiceCredential(deps, context.actor);
+        if (!loaded) {
+          throw new ORPCError("BAD_REQUEST", { message: "Connect a voice provider first." });
+        }
+        const modelId = validateVoiceSynthesisModel(loaded.cred.provider, input.modelId);
+        let voiceLabel: string | null | undefined =
+          input.voiceLabel !== undefined ? (input.voiceLabel?.trim() || null) : undefined;
+        if (voiceLabel === undefined) {
+          const provider = createVoiceProvider(loaded.cred.provider);
+          const adapterContext = voiceContext(context.actor, context.signal);
+          const resolved = provider.getVoice
+            ? (await provider.getVoice(loaded.apiKey, input.voiceId, adapterContext))?.label
+            : (await provider.listVoices(loaded.apiKey, adapterContext)).find(
+                (voice) => voice.id === input.voiceId,
+              )?.label;
+          // Keep the stored label when lookup fails (e.g. model-only updates).
+          if (resolved) voiceLabel = resolved;
+        }
         const cred = await withSerializableRetry(() =>
           deps.prisma.$transaction(
             async (tx) => {
-              const found = input.provider
-                ? await tx.userVoiceCredential.findFirst({
-                    where: { userId: context.actor.userId, provider: input.provider },
-                    orderBy: newestVoiceCredentialOrder,
-                  })
-                : (
-                    await tx.spaceVoicePreference.findFirst({
-                      where: {
-                        userId: context.actor.userId,
-                        spaceId: context.actor.spaceId,
-                        isDefault: true,
-                      },
-                      include: { credential: true },
-                      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-                    })
-                  )?.credential;
-              if (!found) {
-                throw new ORPCError("BAD_REQUEST", { message: "Connect a voice provider first." });
-              }
-              const modelId = validateVoiceSynthesisModel(found.provider, input.modelId);
               // Picking a voice also makes its provider the one speak/transcribe use.
               const preference = await selectSpaceVoicePreference(
                 tx,
                 context.actor,
-                found.id,
+                loaded.cred.id,
                 input.voiceId,
                 modelId,
+                voiceLabel,
               );
-              return { ...found, ...preference, isDefault: true };
+              return { ...loaded.cred, ...preference, isDefault: true };
             },
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           ),

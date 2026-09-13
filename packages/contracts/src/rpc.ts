@@ -750,6 +750,7 @@ export const appContract = {
           voiceId: z.string().min(1).max(120),
           modelId: z.string().max(120).optional(),
           provider: z.string().optional(),
+          voiceLabel: z.string().trim().max(160).nullable().optional(),
         }),
       )
       .output(VoiceStatusSchema),

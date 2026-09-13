@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -124,6 +124,23 @@ export default function VoiceSettings() {
     return () => clearTimeout(timer);
   }, [credential, provider, voiceQuery]);
 
+  const visibleVoiceItems = useMemo(() => {
+    const combined = new Map<string, VoiceLibraryItem>();
+    for (const voice of voiceResults) combined.set(voice.id, voice);
+    for (const voice of favorites) {
+      const existing = combined.get(voice.id);
+      combined.set(voice.id, {
+        ...voice,
+        ...existing,
+        alias: voice.alias ?? existing?.alias,
+      });
+    }
+    const items = [...combined.values()];
+    return favoriteFilter
+      ? items.filter((voice) => favorites.some((item) => item.id === voice.id))
+      : items;
+  }, [favoriteFilter, favorites, voiceResults]);
+
   async function connect() {
     if (!selected || apiKey.trim().length < 8) return;
     setPending(true);
@@ -149,10 +166,18 @@ export default function VoiceSettings() {
     setVoiceId(nextVoiceId);
     setPending(true);
     try {
+      const selectedVoice =
+        favorites.find((voice) => voice.id === nextVoiceId) ??
+        voiceResults.find((voice) => voice.id === nextVoiceId) ??
+        voices.find((voice) => voice.id === nextVoiceId);
       await rpc("voice/setVoice", {
         voiceId: nextVoiceId,
         modelId: modelId || undefined,
         provider: selected?.id,
+        voiceLabel:
+          (selectedVoice && "alias" in selectedVoice && selectedVoice.alias) ||
+          selectedVoice?.label ||
+          null,
       });
       await load(selected?.id);
     } catch (err) {
@@ -432,16 +457,12 @@ export default function VoiceSettings() {
               <TextInput
                 value={voiceQuery}
                 onChangeText={setVoiceQuery}
-                placeholder={t("Search voices by name or ID")}
+                placeholder={t("Search voices")}
                 placeholderTextColor={native.tertiaryLabel}
-                accessibilityLabel={t("Search voices by name or ID")}
+                accessibilityLabel={t("Search voices")}
                 style={styles.searchInput}
               />
-              {voiceResults
-                .filter(
-                  (voice) => !favoriteFilter || favorites.some((item) => item.id === voice.id),
-                )
-                .map((voice) => {
+              {visibleVoiceItems.map((voice) => {
                   const favorite = favorites.some((item) => item.id === voice.id);
                   const alias = favorites.find((item) => item.id === voice.id)?.alias;
                   return (
@@ -451,13 +472,11 @@ export default function VoiceSettings() {
                         onPress={() => void chooseVoice(voice.id)}
                       >
                         <Text style={styles.voiceLabel}>{alias || voice.label}</Text>
-                        {voice.description ? (
+                        {voice.description || voice.label ? (
                           <Text style={styles.optionDescription}>
-                            {voice.description} · {voice.id}
+                            {voice.description || voice.label}
                           </Text>
-                        ) : (
-                          <Text style={styles.optionDescription}>{voice.id}</Text>
-                        )}
+                        ) : null}
                       </Pressable>
                       <Pressable
                         accessibilityRole="button"
