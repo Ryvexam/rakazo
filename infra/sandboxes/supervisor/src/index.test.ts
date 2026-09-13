@@ -42,6 +42,7 @@ import {
   stopExtraScreenCommand,
   teardownReleasedScreen,
   withKeyedLock,
+  workspaceFileAccessPython,
 } from "./supervisor-logic.js";
 
 const token = resolveSupervisorToken(process.env);
@@ -243,6 +244,47 @@ describe("sandbox supervisor input containment", () => {
     expect(() => normalizeWorkspaceRelative("../outside")).toThrow(/escapes/);
     expect(() => normalizeWorkspaceRelative("notes/./result.txt")).toThrow(/escapes/);
     expect(() => normalizeWorkspaceRelative("notes/../outside")).toThrow(/escapes/);
+  });
+
+  it("blocks symlink escapes with no-follow workspace file access", () => {
+    const helper = workspaceFileAccessPython();
+    expect(helper).toContain("O_NOFOLLOW");
+    expect(helper).toContain("/proc/self/fd/");
+    const script = [
+      "import os, tempfile",
+      helper,
+      "workspace = tempfile.mkdtemp(prefix='ws-')",
+      "outside = tempfile.mkdtemp(prefix='out-')",
+      "open(os.path.join(outside, 'secret.txt'), 'w').write('secret')",
+      "os.symlink(outside, os.path.join(workspace, 'escape'))",
+      "os.symlink(os.path.join(outside, 'secret.txt'), os.path.join(workspace, 'secret-link'))",
+      "os.mkdir(os.path.join(workspace, 'ok'))",
+      "open(os.path.join(workspace, 'ok', 'a.txt'), 'w').write('hi')",
+      "WORKSPACE_ROOT = workspace",
+      "fd = open_contained(os.path.join(workspace, 'ok', 'a.txt'), False)",
+      "assert os.read(fd, 8) == b'hi'",
+      "os.close(fd)",
+      "failed = False",
+      "try:",
+      "  open_contained(os.path.join(workspace, 'secret-link'), False)",
+      "except BaseException:",
+      "  failed = True",
+      "assert failed, 'final symlink escape was not blocked'",
+      "failed = False",
+      "try:",
+      "  open_contained(os.path.join(workspace, 'escape'), True)",
+      "except BaseException:",
+      "  failed = True",
+      "assert failed, 'symlink directory listing was not blocked'",
+      "failed = False",
+      "try:",
+      "  open_contained(os.path.join(workspace, 'escape', 'secret.txt'), False)",
+      "except BaseException:",
+      "  failed = True",
+      "assert failed, 'intermediate symlink escape was not blocked'",
+    ].join("\n");
+    const result = spawnSync("python3", ["-c", script], { encoding: "utf8" });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it("requires both bot and workspace identities to match", () => {

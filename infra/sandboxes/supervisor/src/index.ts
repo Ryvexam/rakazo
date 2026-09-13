@@ -78,6 +78,7 @@ import {
   teardownReleasedScreen,
   toSandboxInput,
   withKeyedLock,
+  workspaceFileAccessPython,
   workspaceTarget,
 } from "./supervisor-logic.js";
 
@@ -516,9 +517,10 @@ app.get("/computers/:id/files", async (c) => {
         return c.json({ error: "invalid maxBytes" }, 400);
       }
       const script = [
-        "import base64, sys",
+        workspaceFileAccessPython(),
+        "import base64",
         "target, limit = sys.argv[1], int(sys.argv[2])",
-        "with open(target, 'rb') as source:",
+        "with os.fdopen(open_contained(target, False), 'rb') as source:",
         "  content = source.read() if limit < 0 else source.read(limit + 1)",
         "if limit >= 0 and len(content) > limit: sys.exit(42)",
         "sys.stdout.write(base64.b64encode(content).decode())",
@@ -537,14 +539,20 @@ app.get("/computers/:id/files", async (c) => {
       return c.json({ content: result.stdout.trim() });
     }
     const script = [
-      "import json, os, stat, sys",
+      workspaceFileAccessPython(),
+      "import json, stat",
       "root, rel = sys.argv[1], sys.argv[2]",
+      "fd = open_contained(root, True)",
       "out = []",
-      "for item in os.scandir(root):",
-      "  if item.is_symlink(): continue",
-      "  info = item.stat(follow_symlinks=False)",
-      "  child = '/'.join(x for x in (rel, item.name) if x)",
-      "  out.append({'path': child, 'kind': 'dir' if item.is_dir(follow_symlinks=False) else 'file', 'size': info.st_size, **({'executable': True} if item.is_file(follow_symlinks=False) and bool(info.st_mode & stat.S_IXUSR) else {})})",
+      "try:",
+      "  with os.scandir(f'/proc/self/fd/{fd}') as entries:",
+      "    for item in entries:",
+      "      if item.is_symlink(): continue",
+      "      info = item.stat(follow_symlinks=False)",
+      "      child = '/'.join(x for x in (rel, item.name) if x)",
+      "      out.append({'path': child, 'kind': 'dir' if item.is_dir(follow_symlinks=False) else 'file', 'size': info.st_size, **({'executable': True} if item.is_file(follow_symlinks=False) and bool(info.st_mode & stat.S_IXUSR) else {})})",
+      "finally:",
+      "  os.close(fd)",
       "print(json.dumps(sorted(out, key=lambda x: x['path'])))",
     ].join("\n");
     const result = await runContainerCommand(container, [

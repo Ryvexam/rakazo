@@ -376,6 +376,8 @@ export function containerActionSteps(
   return actions.map((action) => containerActionStep(action, display, browserProfile));
 }
 
+export const COMPUTER_WORKSPACE_ROOT = "/home/rakazo";
+
 export function normalizeWorkspaceRelative(value: string) {
   const normalized = value.replace(/\\/g, "/").replace(/^\/+/, "");
   const segments = normalized.split("/").filter(Boolean);
@@ -386,7 +388,32 @@ export function normalizeWorkspaceRelative(value: string) {
 }
 
 export function workspaceTarget(relative: string) {
-  return relative ? path.posix.join("/home/rakazo", relative) : "/home/rakazo";
+  return relative ? path.posix.join(COMPUTER_WORKSPACE_ROOT, relative) : COMPUTER_WORKSPACE_ROOT;
+}
+
+/**
+ * Python helpers for supervisor file routes: open with O_NOFOLLOW and confirm
+ * the opened inode's realpath stays under the computer workspace root.
+ */
+export function workspaceFileAccessPython(): string {
+  return [
+    "import os, sys",
+    `WORKSPACE_ROOT = ${JSON.stringify(COMPUTER_WORKSPACE_ROOT)}`,
+    "def open_contained(path, directory=False):",
+    "  workspace = os.path.realpath(WORKSPACE_ROOT)",
+    "  flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0)",
+    "  if directory:",
+    "    flags |= os.O_DIRECTORY",
+    "  fd = os.open(path, flags)",
+    "  try:",
+    "    resolved = os.path.realpath(f'/proc/self/fd/{fd}')",
+    "    if resolved != workspace and not resolved.startswith(workspace + os.sep):",
+    "      raise SystemExit('path escapes the computer workspace')",
+    "    return fd",
+    "  except Exception:",
+    "    os.close(fd)",
+    "    raise",
+  ].join("\n");
 }
 
 export function sandboxTimeoutCommand(argv: string[], timeoutMs: number, completionMarker: string) {
