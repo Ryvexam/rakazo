@@ -102,7 +102,15 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(openWork).toBeVisible();
   await expect(modelSelect).toBeVisible();
   await expect(modelSelect).toContainText("Space default");
-  await captureScreenshot(page, testInfo, "27a-bot-settings-model");
+  await expect(openWork.getByText("Goals", { exact: true })).toBeVisible();
+  await expect(openWork.getByText("Autonomy", { exact: true })).toBeVisible();
+  await expect(openWork.getByLabel("Autonomy mode")).toHaveValue("off");
+  await expect(openWork.getByText("Workspace", { exact: true })).toBeVisible();
+  await openWork.getByLabel("New goal").fill("Explore reusable voice presets");
+  await openWork.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(openWork.getByText("Explore reusable voice presets", { exact: true })).toBeVisible();
+  await openWork.scrollIntoViewIfNeeded();
+  await captureScreenshot(page, testInfo, "27a-bot-goals-autonomy");
   await page.getByRole("button", { name: "Show computer" }).click();
   const sidePanel = page.getByTestId("side-panel");
   await expect(sidePanel).toHaveAttribute("data-panel", "computer");
