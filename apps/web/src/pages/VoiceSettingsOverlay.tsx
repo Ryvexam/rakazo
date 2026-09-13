@@ -102,7 +102,7 @@ export function VoiceSettingsOverlay({
     setVoiceId(activeVoice);
     setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
     if (cred) {
-      const listed = await rpc.voice.voices({ provider: selected });
+      const listed = await searchVoiceLibrary(selected, "");
       setVoices(listed);
       setVoiceResults(listed);
       setFavorites(await loadFavoriteVoices(selected));
@@ -124,22 +124,13 @@ export function VoiceSettingsOverlay({
 
   const selected = catalog.find((entry) => entry.id === provider) ?? catalog[0];
   const credential = credentials.find((entry) => entry.provider === provider);
-  const voiceOptions = useMemo(
-    () =>
-      voices.length
-        ? voices
-        : voiceId
-          ? [
-              {
-                id: voiceId,
-                label:
-                  (credential as VoiceCredentialWithLabel | undefined)?.voiceLabel ||
-                  t`Unavailable voice`,
-              },
-            ]
-          : [],
-    [credential, t, voices, voiceId],
-  );
+  const voiceOptions = useMemo(() => {
+    const configuredLabel =
+      (credential as VoiceCredentialWithLabel | undefined)?.voiceLabel || t`Unavailable voice`;
+    if (!voiceId) return voices;
+    if (voices.some((voice) => voice.id === voiceId)) return voices;
+    return [{ id: voiceId, label: configuredLabel }, ...voices];
+  }, [credential, t, voices, voiceId]);
 
   const visibleVoiceItems = useMemo(
     () => visibleVoiceLibraryItems(voiceResults, favorites, voiceQuery, favoriteFilter),
@@ -592,7 +583,7 @@ export function VoiceSettingsOverlay({
                     <div className="mt-2 divide-y divide-border rounded-xl border border-border">
                       {bots.map((bot) => {
                         const selectedVoice = bot.voiceId ?? "";
-                        const selectedVoiceInfo = voiceOptions.find(
+                        const selectedVoiceInfo = assignableVoiceOptions.find(
                           (voice) => voice.id === selectedVoice,
                         );
                         const botVoiceOptions =

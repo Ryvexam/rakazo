@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { Routine, RunActivityRow } from "@ryvoko/contracts";
 import { Button, NativeSelect, NativeSelectOption } from "@ryvoko/ui-web";
 import { Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { rpc } from "../lib/rpc";
 import {
@@ -53,6 +53,7 @@ export function AutonomySection({ botId }: { botId: string }) {
   const [runs, setRuns] = useState<RunActivityRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runNowNonceRef = useRef<string | null>(null);
 
   function applyRoutine(next: AutonomyRoutineState | null) {
     setRoutine(next);
@@ -73,16 +74,13 @@ export function AutonomySection({ botId }: { botId: string }) {
   async function refresh() {
     const [routines, recent] = await Promise.all([
       rpc.routines.list({ botId }),
-      rpc.runs.list({ filter: "recent" }),
+      rpc.runs.list({ filter: "recent", botId }),
     ]);
     applyRoutine(routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null);
     setRuns(
       recent.runs
         .filter(
-          (run) =>
-            run.botId === botId &&
-            run.trigger === "routine" &&
-            run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
+          (run) => run.trigger === "routine" && run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
         )
         .slice(0, 5),
     );
@@ -90,7 +88,7 @@ export function AutonomySection({ botId }: { botId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([rpc.routines.list({ botId }), rpc.runs.list({ filter: "recent" })])
+    void Promise.all([rpc.routines.list({ botId }), rpc.runs.list({ filter: "recent", botId })])
       .then(([routines, recent]) => {
         if (cancelled) return;
         applyRoutine(routines.find((entry) => isAutonomyPrompt(entry.prompt)) ?? null);
@@ -98,9 +96,7 @@ export function AutonomySection({ botId }: { botId: string }) {
           recent.runs
             .filter(
               (run) =>
-                run.botId === botId &&
-                run.trigger === "routine" &&
-                run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
+                run.trigger === "routine" && run.promptSnippet.includes(AUTONOMY_PROMPT_MARKER),
             )
             .slice(0, 5),
         );
@@ -121,13 +117,16 @@ export function AutonomySection({ botId }: { botId: string }) {
     setError(null);
     try {
       if (mode === "off") {
-        if (routine) await rpc.routines.update({ routineId: routine.id, active: false });
+        if (routine) {
+          const updated = await rpc.routines.update({ routineId: routine.id, active: false });
+          applyRoutine(updated);
+        }
       } else {
         const prompt = buildAutonomyPrompt(mode, { maxGoalsPerDay, maxChainDepth });
         const crons = [autonomyCron(heartbeatMinutes)];
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
         if (routine) {
-          await rpc.routines.update({
+          const updated = await rpc.routines.update({
             routineId: routine.id,
             name: AUTONOMY_ROUTINE_NAME,
             prompt,
@@ -136,8 +135,9 @@ export function AutonomySection({ botId }: { botId: string }) {
             active: true,
             notify: false,
           });
+          applyRoutine(updated);
         } else {
-          await rpc.routines.create({
+          const created = await rpc.routines.create({
             botId,
             name: AUTONOMY_ROUTINE_NAME,
             prompt,
@@ -149,9 +149,14 @@ export function AutonomySection({ botId }: { botId: string }) {
             githubEnabled: false,
             messageProvider: null,
           });
+          applyRoutine(created);
         }
       }
-      await refresh();
+      try {
+        await refresh();
+      } catch {
+        // Mutation already succeeded; keep local routine and avoid a false save error.
+      }
     } catch {
       setError(t`Could not save`);
     } finally {
@@ -163,12 +168,19 @@ export function AutonomySection({ botId }: { botId: string }) {
     if (!routine?.active || busy) return;
     setBusy(true);
     setError(null);
+    const clientNonce = runNowNonceRef.current ?? `autonomy:${routine.id}:${Date.now()}`;
+    runNowNonceRef.current = clientNonce;
     try {
       await rpc.routines.testRun({
         routineId: routine.id,
-        clientNonce: `autonomy:${routine.id}:${Date.now()}`,
+        clientNonce,
       });
-      await refresh();
+      runNowNonceRef.current = null;
+      try {
+        await refresh();
+      } catch {
+        // Start already succeeded; keep the retained nonce cleared.
+      }
     } catch {
       setError(t`Could not start`);
     } finally {

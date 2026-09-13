@@ -54,6 +54,20 @@ export const FISH_AUDIO_TTS_MODELS = [
   },
 ] as const;
 
+/** Keep exact-match hits scope-honest: never promote a private voice to public. */
+function exactMatchForQueryScope(
+  voice: VoiceInfo,
+  scope: VoiceCatalogQuery["scope"],
+): VoiceInfo | null {
+  if (scope === "public") {
+    return voice.scope === "public" ? voice : null;
+  }
+  if (scope === "owned") {
+    return { ...voice, scope: "owned" };
+  }
+  return voice;
+}
+
 export class FishAudioVoiceProvider implements VoiceProvider {
   /** Advertise Fish Audio's model catalog, speech synthesis, and transcription support. */
   describe(): AdapterDescriptor<VoiceCapabilities> {
@@ -121,8 +135,9 @@ export class FishAudioVoiceProvider implements VoiceProvider {
     const requestedVoiceId = boundedQuery(query.voiceId);
     if (requestedVoiceId) {
       const voice = await this.getVoice(apiKey, requestedVoiceId, searchContext);
+      const matched = voice ? exactMatchForQueryScope(voice, query.scope) : null;
       return {
-        items: voice ? [{ ...voice, scope: voice.scope ?? query.scope }] : [],
+        items: matched ? [matched] : [],
         windowLimited: false,
       };
     }
@@ -154,14 +169,15 @@ export class FishAudioVoiceProvider implements VoiceProvider {
       .filter((voice): voice is VoiceInfo => voice !== null);
     if (items.length === 0 && looksLikeVoiceId(title)) {
       const voice = await this.getVoice(apiKey, title, searchContext);
-      if (voice) {
+      const matched = voice ? exactMatchForQueryScope(voice, query.scope) : null;
+      if (matched) {
         return {
-          items: [{ ...voice, scope: voice.scope ?? query.scope }],
+          items: [matched],
           windowLimited: false,
         };
       }
     }
-    const hasMore = modelPageHasMore(body, page, models.length, pageSize);
+    const hasMore = page < SEARCH_MAX_PAGE && modelPageHasMore(body, page, models.length, pageSize);
     const windowLimited = modelWindowIsLimited(body);
     return {
       items: dedupeVoices(items),

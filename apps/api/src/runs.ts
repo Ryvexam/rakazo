@@ -1,4 +1,5 @@
-import { type Actor, MessageBlock, type RunActivityRow } from "@ryvoko/contracts";
+import type { Actor, RunActivityRow } from "@ryvoko/contracts";
+import { MessageBlock } from "@ryvoko/contracts";
 import { ACTIVE_RUN_STATUSES, botMessageContext } from "@ryvoko/core";
 import type { PrismaClient } from "@ryvoko/db";
 
@@ -38,11 +39,13 @@ export async function listSpaceRuns(
   prisma: PrismaClient,
   actor: Actor,
   filter: "active" | "recent",
+  botId?: string,
 ): Promise<RunActivityRow[]> {
   const rows = await prisma.run.findMany({
     where: {
       spaceId: actor.spaceId,
       userId: actor.userId,
+      ...(botId ? { botId } : {}),
       bot: { archivedAt: null },
       ...(filter === "active"
         ? { status: { in: [...ACTIVE_RUN_STATUSES] } }

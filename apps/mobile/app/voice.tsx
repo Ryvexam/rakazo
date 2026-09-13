@@ -72,34 +72,42 @@ export default function VoiceSettings() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async (nextProvider?: string) => {
-    const [nextCatalog, nextCredentials, nextStatus] = await Promise.all([
-      rpc<VoiceCatalogEntry[]>("voice/catalog"),
-      rpc<VoiceCredential[]>("voice/credentials"),
-      rpc<VoiceStatus>("voice/status"),
-    ]);
-    const nextBots = await rpc<VoiceBot[]>("bots/list").catch(() => []);
-    const selected = nextProvider || nextStatus.provider || nextCatalog[0]?.id || "";
-    setCatalog(nextCatalog);
-    setCredentials(nextCredentials);
-    setStatus(nextStatus);
-    setBots(nextBots);
-    setProvider(selected);
-    const cred = nextCredentials.find((entry) => entry.provider === selected);
-    const catalogEntry = nextCatalog.find((entry) => entry.id === selected);
-    setVoiceId(cred?.voiceId ?? "");
-    setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
-    if (cred) {
-      const listed = await rpc<VoiceInfo[]>("voice/voices", { provider: selected });
-      setVoices(listed);
-      setVoiceResults(listed);
-      setFavorites(await loadFavoriteVoices(selected));
-    } else {
-      setVoices([]);
-      setVoiceResults([]);
-      setFavorites([]);
-    }
-  }, []);
+  const load = useCallback(
+    async (nextProvider?: string) => {
+      const [nextCatalog, nextCredentials, nextStatus] = await Promise.all([
+        rpc<VoiceCatalogEntry[]>("voice/catalog"),
+        rpc<VoiceCredential[]>("voice/credentials"),
+        rpc<VoiceStatus>("voice/status"),
+      ]);
+      const nextBots = await rpc<VoiceBot[]>("bots/list").catch(() => []);
+      const selected = nextProvider || nextStatus.provider || nextCatalog[0]?.id || "";
+      setCatalog(nextCatalog);
+      setCredentials(nextCredentials);
+      setStatus(nextStatus);
+      setBots(nextBots);
+      setProvider(selected);
+      const cred = nextCredentials.find((entry) => entry.provider === selected);
+      const catalogEntry = nextCatalog.find((entry) => entry.id === selected);
+      setVoiceId(cred?.voiceId ?? "");
+      setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
+      if (cred) {
+        const listed = await searchVoiceLibrary(selected, "");
+        const activeVoice = cred.voiceId ?? "";
+        const withConfigured =
+          activeVoice && !listed.some((voice) => voice.id === activeVoice)
+            ? [{ id: activeVoice, label: t("Unavailable voice") }, ...listed]
+            : listed;
+        setVoices(withConfigured);
+        setVoiceResults(listed);
+        setFavorites(await loadFavoriteVoices(selected));
+      } else {
+        setVoices([]);
+        setVoiceResults([]);
+        setFavorites([]);
+      }
+    },
+    [t],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -663,25 +671,13 @@ function createVoiceStyles() {
 }
 
 async function searchVoiceLibrary(provider: string, query: string): Promise<VoiceLibraryItem[]> {
-  try {
-    const result = await rpc<{ items: VoiceLibraryItem[] }>("voice/search", {
-      provider,
-      query: query.trim() || undefined,
-      page: 1,
-      pageSize: 50,
-    });
-    return result.items;
-  } catch {
-    const response = await rpc<VoiceInfo[]>("voice/voices", { provider });
-    const normalized = query.trim().toLocaleLowerCase();
-    return response.filter(
-      (voice) =>
-        !normalized ||
-        [voice.id, voice.label, voice.description]
-          .filter(Boolean)
-          .some((value) => value?.toLocaleLowerCase().includes(normalized)),
-    );
-  }
+  const result = await rpc<{ items: VoiceLibraryItem[] }>("voice/search", {
+    provider,
+    query: query.trim() || undefined,
+    page: 1,
+    pageSize: 50,
+  });
+  return result.items;
 }
 
 async function loadFavoriteVoices(provider: string): Promise<VoiceLibraryItem[]> {

@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   AUTONOMOUS_GOAL_MARKER,
   autonomyCron,
+  autonomyLimitError,
   buildAutonomousPromotedGoalNotes,
   buildAutonomyPrompt,
   buildUserPromotedGoalNotes,
+  countAutonomousGoalsForUtcDay,
+  ensureAutonomousPromotedGoalNotes,
   exceedsGoalChainDepth,
   goalTitle,
   heartbeatFromCrons,
   ideaTitle,
   isAutonomyPrompt,
   isIdeaTitle,
+  isIntroducingAutonomousGoal,
   OPPORTUNITY_MARKER,
   parseAutonomyLimits,
   parseAutonomyMode,
@@ -18,7 +22,7 @@ import {
   SCRATCHPAD_NOTES_MAX,
   USER_PROMOTED_GOAL_MARKER,
   visibleWorkNotes,
-} from "./autonomy";
+} from "./autonomy.js";
 
 describe("autonomy helpers", () => {
   it("round-trips supported heartbeat intervals", () => {
@@ -111,5 +115,66 @@ Too deep.`;
     expect(exceedsGoalChainDepth(notes)).toBe(true);
     expect(exceedsGoalChainDepth(notes, 3)).toBe(true);
     expect(exceedsGoalChainDepth(notes.replace("depth=4", "depth=3"), 3)).toBe(false);
+  });
+
+  it("detects autonomous goal introduction and stamps autonomousAt lineage", () => {
+    const ideaNotes = `${OPPORTUNITY_MARKER}
+sourceGoalId=goal-1
+depth=2
+value=high
+effort=low
+confidence=high
+
+Ship voice speed.`;
+    expect(
+      isIntroducingAutonomousGoal({
+        title: "Voice speed",
+        status: "open",
+        notes: ideaNotes,
+        previousTitle: "[idea] Voice speed",
+        previousStatus: "parked",
+        previousNotes: ideaNotes,
+      }),
+    ).toBe(true);
+
+    const stamped = ensureAutonomousPromotedGoalNotes(
+      "idea-1",
+      ideaNotes,
+      new Date("2026-09-13T12:00:00.000Z"),
+    );
+    expect(stamped).toContain(AUTONOMOUS_GOAL_MARKER);
+    expect(stamped).toContain("autonomousAt=2026-09-13T12:00:00.000Z");
+    expect(
+      countAutonomousGoalsForUtcDay(
+        [{ notes: stamped, createdAt: new Date("2026-09-01T00:00:00.000Z") }],
+        new Date("2026-09-13T15:00:00.000Z"),
+      ),
+    ).toBe(1);
+  });
+
+  it("returns autonomy limit errors for depth and daily cap", () => {
+    const deepNotes = `${OPPORTUNITY_MARKER}
+sourceGoalId=goal-1
+depth=3
+value=high
+effort=low
+confidence=high
+
+Too deep for limit 2.`;
+    expect(
+      autonomyLimitError({
+        notes: deepNotes,
+        limits: { maxGoalsPerDay: 3, maxChainDepth: 2 },
+        autonomousGoalsToday: 0,
+      }),
+    ).toBe("Autonomy goal chain depth limit is 2.");
+
+    expect(
+      autonomyLimitError({
+        notes: deepNotes.replace("depth=3", "depth=2"),
+        limits: { maxGoalsPerDay: 1, maxChainDepth: 2 },
+        autonomousGoalsToday: 1,
+      }),
+    ).toBe("Autonomy daily goal limit is 1.");
   });
 });

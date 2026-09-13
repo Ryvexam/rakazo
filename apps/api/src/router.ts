@@ -200,6 +200,7 @@ import {
   pageListedVoices,
   persistVoiceCredential,
   prepareVoice,
+  resolvePersistedVoiceLabel,
   toVoiceCredential,
   toVoiceStatus,
   validateVoiceSynthesisModel,
@@ -1065,8 +1066,13 @@ export function createRouter(deps: RouterDeps) {
             if (!credential) {
               throw new ORPCError("BAD_REQUEST", { message: "Connect that voice provider first." });
             }
+            // A provider switch must not reuse the previous provider's model id.
             const modelId =
-              input.voiceModelId !== undefined ? input.voiceModelId : existing.voiceModelId;
+              input.voiceModelId !== undefined
+                ? input.voiceModelId
+                : effectiveProvider === existing.voiceProvider
+                  ? existing.voiceModelId
+                  : undefined;
             const validatedModelId = validateVoiceSynthesisModel(
               effectiveProvider,
               modelId ?? undefined,
@@ -4622,7 +4628,7 @@ export function createRouter(deps: RouterDeps) {
     },
     runs: {
       list: authed.runs.list.handler(async ({ context, input }) => ({
-        runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
+        runs: await listSpaceRuns(deps.prisma, context.actor, input.filter, input.botId),
       })),
     },
     voice: {
@@ -4669,9 +4675,10 @@ export function createRouter(deps: RouterDeps) {
           throw new ORPCError("BAD_REQUEST", { message: "Connect a voice provider first." });
         }
         const modelId = validateVoiceSynthesisModel(loaded.cred.provider, input.modelId);
-        let voiceLabel: string | null | undefined =
+        const explicitLabel =
           input.voiceLabel !== undefined ? input.voiceLabel?.trim() || null : undefined;
-        if (voiceLabel === undefined) {
+        let lookedUpLabel: string | null = null;
+        if (explicitLabel === undefined) {
           try {
             const provider = createVoiceProvider(loaded.cred.provider);
             const adapterContext = voiceContext(context.actor, context.signal);
@@ -4680,8 +4687,7 @@ export function createRouter(deps: RouterDeps) {
               : (await provider.listVoices(loaded.apiKey, adapterContext)).find(
                   (voice) => voice.id === input.voiceId,
                 )?.label;
-            // Keep the stored label when lookup misses (e.g. model-only updates).
-            if (resolved) voiceLabel = resolved;
+            lookedUpLabel = resolved ?? null;
           } catch {
             // Provider outage must not block model-only preference updates.
           }
@@ -4689,6 +4695,24 @@ export function createRouter(deps: RouterDeps) {
         const cred = await withSerializableRetry(() =>
           deps.prisma.$transaction(
             async (tx) => {
+              const previous = await tx.spaceVoicePreference.findUnique({
+                where: {
+                  spaceId_userId_credentialId: {
+                    spaceId: context.actor.spaceId,
+                    userId: context.actor.userId,
+                    credentialId: loaded.cred.id,
+                  },
+                },
+              });
+              const voiceLabel =
+                explicitLabel !== undefined
+                  ? explicitLabel
+                  : resolvePersistedVoiceLabel({
+                      explicitVoiceId: input.voiceId,
+                      lookedUpLabel,
+                      previousVoiceId: previous?.voiceId,
+                      previousVoiceLabel: previous?.voiceLabel,
+                    });
               // Picking a voice also makes its provider the one speak/transcribe use.
               const preference = await selectSpaceVoicePreference(
                 tx,
