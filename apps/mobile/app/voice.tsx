@@ -211,11 +211,11 @@ export default function VoiceSettings() {
       actions: [
         {
           text: t("Account default"),
-          onPress: () => void chooseBotVoice(bot.id, ""),
+          onPress: () => void chooseBotVoice(bot.id, "", null),
         },
         ...options.map((voice) => ({
           text: voice.alias || voice.label,
-          onPress: () => void chooseBotVoice(bot.id, voice.id),
+          onPress: () => void chooseBotVoice(bot.id, voice.id, voice.alias || voice.label),
         })),
       ],
       cancel: t("Cancel"),
@@ -224,7 +224,11 @@ export default function VoiceSettings() {
     });
   }
 
-  async function chooseBotVoice(botId: string, nextVoiceId: string) {
+  async function chooseBotVoice(
+    botId: string,
+    nextVoiceId: string,
+    nextVoiceLabel: string | null,
+  ) {
     if (botVoicePending) return;
     setBotVoicePending(botId);
     setError(null);
@@ -234,7 +238,8 @@ export default function VoiceSettings() {
         // Empty selection explicitly restores the account/space default.
         voiceId: nextVoiceId || null,
         voiceProvider: nextVoiceId ? (selected?.id ?? null) : null,
-        voiceModelId: null,
+        voiceModelId: nextVoiceId ? modelId || null : null,
+        voiceLabel: nextVoiceId ? nextVoiceLabel : null,
       });
       setBots((current) => current.map((bot) => (bot.id === updated.id ? updated : bot)));
     } catch (err) {

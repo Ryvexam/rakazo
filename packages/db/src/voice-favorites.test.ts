@@ -89,11 +89,34 @@ describe("voice favorites", () => {
   });
 
   it("rejects updates for favorites outside the actor scope", async () => {
-    const prisma = db({ findFirst: vi.fn().mockResolvedValue(null) });
+    const prisma = db({
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    });
 
     await expect(
       updateVoiceFavorite(prisma, actor, { id: "other-favorite", label: "Nope" }),
     ).rejects.toBeInstanceOf(IsolationError);
+    expect(prisma.voiceFavorite.updateMany).toHaveBeenCalledWith({
+      where: { id: "other-favorite", spaceId: "space-1", userId: "user-1" },
+      data: { label: "Nope" },
+    });
+    expect(prisma.voiceFavorite.update).not.toHaveBeenCalled();
+  });
+
+  it("updates favorites only through the actor-scoped where clause", async () => {
+    const updated = row("fav-1", 0);
+    const prisma = db({
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findFirst: vi.fn().mockResolvedValue({ ...updated, label: "Renamed" }),
+    });
+
+    await expect(
+      updateVoiceFavorite(prisma, actor, { id: "fav-1", label: " Renamed " }),
+    ).resolves.toMatchObject({ id: "fav-1", label: "Renamed" });
+    expect(prisma.voiceFavorite.updateMany).toHaveBeenCalledWith({
+      where: { id: "fav-1", spaceId: "space-1", userId: "user-1" },
+      data: { label: "Renamed" },
+    });
     expect(prisma.voiceFavorite.update).not.toHaveBeenCalled();
   });
 

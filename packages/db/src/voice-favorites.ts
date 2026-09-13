@@ -123,21 +123,23 @@ export async function updateVoiceFavorite(
     label?: string | null;
   },
 ): Promise<VoiceFavorite> {
-  const existing = await prisma.voiceFavorite.findFirst({
-    where: favoriteWhere(actor, input.id),
-  });
-  if (!existing) throw new IsolationError();
   try {
-    const row = await prisma.voiceFavorite.update({
-      where: { id: input.id },
+    const result = await prisma.voiceFavorite.updateMany({
+      where: favoriteWhere(actor, input.id),
       data: {
         ...(input.provider === undefined ? {} : { provider: input.provider.trim() }),
         ...(input.voiceId === undefined ? {} : { voiceId: input.voiceId.trim() }),
         ...(input.label === undefined ? {} : { label: normalizeLabel(input.label) }),
       },
     });
+    if (result.count === 0) throw new IsolationError();
+    const row = await prisma.voiceFavorite.findFirst({
+      where: favoriteWhere(actor, input.id),
+    });
+    if (!row) throw new IsolationError();
     return toVoiceFavorite(row);
   } catch (error) {
+    if (error instanceof IsolationError) throw error;
     if (isUniqueViolation(error)) throw new VoiceFavoriteAlreadyExistsError();
     throw error;
   }

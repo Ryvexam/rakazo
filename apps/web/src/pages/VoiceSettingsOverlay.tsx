@@ -239,12 +239,18 @@ export function VoiceSettingsOverlay({
     setBotVoicePending(botId);
     setError(null);
     try {
+      const selectedVoice = nextVoiceId
+        ? assignableVoiceOptions.find((voice) => voice.id === nextVoiceId)
+        : undefined;
       const updated = await rpc.bots.update({
         botId,
         // An empty selection explicitly restores the space/account voice.
         voiceId: nextVoiceId || null,
         voiceProvider: nextVoiceId ? (selected?.id ?? null) : null,
-        voiceModelId: nextVoiceId ? null : null,
+        voiceModelId: nextVoiceId ? modelId || null : null,
+        voiceLabel: nextVoiceId
+          ? (selectedVoice?.alias || selectedVoice?.label || null)
+          : null,
       });
       setBots((current) =>
         current.map((bot) => (bot.id === updated.id ? { ...bot, ...updated } : bot)),

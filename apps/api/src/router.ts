@@ -1014,7 +1014,8 @@ export function createRouter(deps: RouterDeps) {
         const voiceUpdateRequested =
           input.voiceId !== undefined ||
           input.voiceProvider !== undefined ||
-          input.voiceModelId !== undefined;
+          input.voiceModelId !== undefined ||
+          input.voiceLabel !== undefined;
         let voiceData: {
           voiceId: string | null;
           voiceProvider: string | null;
@@ -1037,14 +1038,13 @@ export function createRouter(deps: RouterDeps) {
               voiceLabel: null,
             };
           } else {
-            const provider = input.voiceProvider ?? existing.voiceProvider;
-            let voiceId = input.voiceId ?? existing.voiceId;
-            if (!provider && voiceId) {
+            const voiceId = input.voiceId !== undefined ? input.voiceId : existing.voiceId;
+            let effectiveProvider =
+              input.voiceProvider !== undefined ? input.voiceProvider : existing.voiceProvider;
+            if (!effectiveProvider && voiceId) {
               const defaultVoice = await findDefaultVoiceCredential(deps.prisma, context.actor);
-              voiceId = input.voiceId ?? existing.voiceId;
-              if (defaultVoice) voiceData.voiceProvider = defaultVoice.provider;
+              effectiveProvider = defaultVoice?.provider ?? null;
             }
-            const effectiveProvider = input.voiceProvider ?? voiceData.voiceProvider;
             if (!effectiveProvider || !voiceId) {
               throw new ORPCError("BAD_REQUEST", {
                 message: "Connect a voice provider and select a voice first.",
@@ -1067,14 +1067,18 @@ export function createRouter(deps: RouterDeps) {
               effectiveProvider,
               modelId ?? undefined,
             );
+            const voiceChanged =
+              input.voiceId !== undefined && input.voiceId !== existing.voiceId;
             voiceData = {
               voiceId,
               voiceProvider: effectiveProvider,
               voiceModelId: validatedModelId ?? modelId ?? null,
               voiceLabel:
-                input.voiceId !== undefined && input.voiceId !== existing.voiceId
-                  ? null
-                  : (existing.voiceLabel ?? null),
+                input.voiceLabel !== undefined
+                  ? input.voiceLabel
+                  : voiceChanged
+                    ? null
+                    : (existing.voiceLabel ?? null),
             };
           }
         }

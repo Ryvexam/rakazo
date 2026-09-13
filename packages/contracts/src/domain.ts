@@ -319,6 +319,7 @@ export const UpdateBotInput = z
     voiceId: z.string().max(120).nullable().optional(),
     voiceProvider: z.string().trim().min(1).max(80).nullable().optional(),
     voiceModelId: z.string().trim().min(1).max(120).nullable().optional(),
+    voiceLabel: z.string().trim().max(160).nullable().optional(),
     autoSpeak: z.boolean().optional(),
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
@@ -343,6 +344,13 @@ export const UpdateBotInput = z
         code: "custom",
         message: "A voice id is required when a voice provider is set",
         path: ["voiceId"],
+      });
+    }
+    if (value.voiceId === null && value.voiceLabel !== undefined && value.voiceLabel !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A voice label requires a voice id",
+        path: ["voiceLabel"],
       });
     }
     const providerProvided = value.modelProvider !== undefined;

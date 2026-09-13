@@ -56,6 +56,16 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   expect(credentials).toEqual([expect.objectContaining({ hasKey: true, provider: "scripted" })]);
   expect(JSON.stringify(credentials)).not.toContain("fake-scripted-voice-key");
 
+  // Voice library + bot assignment chrome from this PR (no live Fish key required).
+  await expect(page.getByTestId("voice-library")).toBeVisible();
+  await expect(page.getByLabel("Search voices by name or ID", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Favorites", exact: true }).click();
+  await captureScreenshot(page, testInfo, "voice-library-favorites");
+  await page.getByRole("button", { name: "All", exact: true }).click();
+  await expect(page.getByTestId("fish-bot-voices")).toBeVisible();
+  await expect(page.getByTestId("fish-bot-voices")).toContainText("Chief");
+  await captureScreenshot(page, testInfo, "voice-bot-assignment");
+
   await page.getByRole("button", { name: "Close voice settings" }).click();
 
   const composer = page.getByPlaceholder(/Message/);
