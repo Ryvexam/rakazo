@@ -250,11 +250,7 @@ export default function VoiceSettings() {
     });
   }
 
-  async function chooseBotVoice(
-    botId: string,
-    nextVoiceId: string,
-    nextVoiceLabel: string | null,
-  ) {
+  async function chooseBotVoice(botId: string, nextVoiceId: string, nextVoiceLabel: string | null) {
     if (botVoicePending) return;
     setBotVoicePending(botId);
     setError(null);
@@ -463,57 +459,57 @@ export default function VoiceSettings() {
                 style={styles.searchInput}
               />
               {visibleVoiceItems.map((voice) => {
-                  const favorite = favorites.some((item) => item.id === voice.id);
-                  const alias = favorites.find((item) => item.id === voice.id)?.alias;
-                  return (
-                    <View key={voice.id} style={styles.libraryRow}>
-                      <Pressable
-                        style={styles.libraryCopy}
-                        onPress={() => void chooseVoice(voice.id)}
-                      >
-                        <Text style={styles.voiceLabel}>{alias || voice.label}</Text>
-                        {voice.description || voice.label ? (
-                          <Text style={styles.optionDescription}>
-                            {voice.description || voice.label}
-                          </Text>
-                        ) : null}
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          favorite ? t("Remove from favorites") : t("Add to favorites")
-                        }
-                        onPress={() => void toggleFavorite(voice)}
-                      >
-                        <Text style={favorite ? styles.favoriteActive : styles.filterLabel}>
-                          {favorite ? "★" : "☆"}
+                const favorite = favorites.some((item) => item.id === voice.id);
+                const alias = favorites.find((item) => item.id === voice.id)?.alias;
+                return (
+                  <View key={voice.id} style={styles.libraryRow}>
+                    <Pressable
+                      style={styles.libraryCopy}
+                      onPress={() => void chooseVoice(voice.id)}
+                    >
+                      <Text style={styles.voiceLabel}>{alias || voice.label}</Text>
+                      {voice.description || voice.label ? (
+                        <Text style={styles.optionDescription}>
+                          {voice.description || voice.label}
                         </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => {
-                          setAliasVoiceId(voice.id);
-                          setAliasDraft(alias || "");
-                        }}
-                      >
-                        <Text style={styles.filterLabel}>{t("Alias")}</Text>
-                      </Pressable>
-                      {aliasVoiceId === voice.id ? (
-                        <View style={styles.aliasEditor}>
-                          <TextInput
-                            value={aliasDraft}
-                            onChangeText={setAliasDraft}
-                            placeholder={t("Alias")}
-                            placeholderTextColor={native.tertiaryLabel}
-                            style={styles.aliasInput}
-                          />
-                          <Pressable onPress={() => void saveVoiceAlias(voice)}>
-                            <Text style={styles.filterActive}>{t("Save")}</Text>
-                          </Pressable>
-                        </View>
                       ) : null}
-                    </View>
-                  );
-                })}
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        favorite ? t("Remove from favorites") : t("Add to favorites")
+                      }
+                      onPress={() => void toggleFavorite(voice)}
+                    >
+                      <Text style={favorite ? styles.favoriteActive : styles.filterLabel}>
+                        {favorite ? "★" : "☆"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setAliasVoiceId(voice.id);
+                        setAliasDraft(alias || "");
+                      }}
+                    >
+                      <Text style={styles.filterLabel}>{t("Alias")}</Text>
+                    </Pressable>
+                    {aliasVoiceId === voice.id ? (
+                      <View style={styles.aliasEditor}>
+                        <TextInput
+                          value={aliasDraft}
+                          onChangeText={setAliasDraft}
+                          placeholder={t("Alias")}
+                          placeholderTextColor={native.tertiaryLabel}
+                          style={styles.aliasInput}
+                        />
+                        <Pressable onPress={() => void saveVoiceAlias(voice)}>
+                          <Text style={styles.filterActive}>{t("Save")}</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
             <View style={styles.botVoices}>
               <Text style={styles.optionHeading}>{t("Bot voices")}</Text>

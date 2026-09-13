@@ -1067,8 +1067,7 @@ export function createRouter(deps: RouterDeps) {
               effectiveProvider,
               modelId ?? undefined,
             );
-            const voiceChanged =
-              input.voiceId !== undefined && input.voiceId !== existing.voiceId;
+            const voiceChanged = input.voiceId !== undefined && input.voiceId !== existing.voiceId;
             voiceData = {
               voiceId,
               voiceProvider: effectiveProvider,
@@ -4667,7 +4666,7 @@ export function createRouter(deps: RouterDeps) {
         }
         const modelId = validateVoiceSynthesisModel(loaded.cred.provider, input.modelId);
         let voiceLabel: string | null | undefined =
-          input.voiceLabel !== undefined ? (input.voiceLabel?.trim() || null) : undefined;
+          input.voiceLabel !== undefined ? input.voiceLabel?.trim() || null : undefined;
         if (voiceLabel === undefined) {
           const provider = createVoiceProvider(loaded.cred.provider);
           const adapterContext = voiceContext(context.actor, context.signal);

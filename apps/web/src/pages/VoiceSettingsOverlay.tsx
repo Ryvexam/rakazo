@@ -250,9 +250,7 @@ export function VoiceSettingsOverlay({
         voiceId: nextVoiceId || null,
         voiceProvider: nextVoiceId ? (selected?.id ?? null) : null,
         voiceModelId: nextVoiceId ? modelId || null : null,
-        voiceLabel: nextVoiceId
-          ? (selectedVoice?.alias || selectedVoice?.label || null)
-          : null,
+        voiceLabel: nextVoiceId ? selectedVoice?.alias || selectedVoice?.label || null : null,
       });
       setBots((current) =>
         current.map((bot) => (bot.id === updated.id ? { ...bot, ...updated } : bot)),
