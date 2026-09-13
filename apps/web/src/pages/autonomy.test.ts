@@ -14,6 +14,7 @@ import {
   parseAutonomyMode,
   parseOpportunityMetadata,
   USER_PROMOTED_GOAL_MARKER,
+  visibleWorkNotes,
 } from "./autonomy";
 
 describe("autonomy helpers", () => {
@@ -70,5 +71,6 @@ Add speaking-rate controls to voice settings.`;
     expect(promoted).toContain(USER_PROMOTED_GOAL_MARKER);
     expect(promoted).toContain("sourceIdeaId=idea-1");
     expect(promoted).toContain("depth=2");
+    expect(visibleWorkNotes(promoted)).toBe("Add speaking-rate controls to voice settings.");
   });
 });
