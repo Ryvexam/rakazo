@@ -147,11 +147,19 @@ export function VoiceSettingsOverlay({
       const existing = combined.get(voice.id);
       combined.set(voice.id, { ...voice, ...existing, alias: voice.alias ?? existing?.alias });
     }
-    const items = [...combined.values()];
+    const query = voiceQuery.trim().toLowerCase();
+    let items = [...combined.values()];
+    if (query) {
+      items = items.filter((voice) =>
+        [voice.id, voice.label, voice.description, voice.alias]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query)),
+      );
+    }
     return favoriteFilter
       ? items.filter((voice) => favorites.some((item) => item.id === voice.id))
       : items;
-  }, [favoriteFilter, favorites, voiceResults]);
+  }, [favoriteFilter, favorites, voiceQuery, voiceResults]);
 
   const assignableVoiceOptions = useMemo(() => {
     const combined = new Map<string, VoiceLibraryItem>();

@@ -143,11 +143,19 @@ export default function VoiceSettings() {
         alias: voice.alias ?? existing?.alias,
       });
     }
-    const items = [...combined.values()];
+    const query = voiceQuery.trim().toLowerCase();
+    let items = [...combined.values()];
+    if (query) {
+      items = items.filter((voice) =>
+        [voice.id, voice.label, voice.description, voice.alias]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query)),
+      );
+    }
     return favoriteFilter
       ? items.filter((voice) => favorites.some((item) => item.id === voice.id))
       : items;
-  }, [favoriteFilter, favorites, voiceResults]);
+  }, [favoriteFilter, favorites, voiceQuery, voiceResults]);
 
   async function connect() {
     if (!selected || apiKey.trim().length < 8) return;
