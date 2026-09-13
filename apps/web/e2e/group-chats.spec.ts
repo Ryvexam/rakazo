@@ -14,7 +14,7 @@ async function createBot(page: Page, name: string) {
 
 test("create group from + and see two bots in one transcript", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `group-${stamp}@rakazo.test`, "password12", "Group E2E");
+  await signup(page, `group-${stamp}@ryvoko.test`, "password12", "Group E2E");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -92,12 +92,12 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
     .locator("aside")
     .first()
     .getByRole("button", { name: /^Draft team/ })
-    .locator(".rakazo-group-avatar");
+    .locator(".ryvoko-group-avatar");
   await expect(groupAvatar).toBeVisible();
-  await expect(groupAvatar.locator(".rakazo-bot-avatar")).toHaveCount(2);
+  await expect(groupAvatar.locator(".ryvoko-bot-avatar")).toHaveCount(2);
   const workingAvatar = groupAvatar.locator('[data-working="true"]');
   await expect(workingAvatar).toHaveCount(1);
-  await expect(workingAvatar.locator("svg")).toHaveCSS("animation-name", "rakazo-avatar-spin");
+  await expect(workingAvatar.locator("svg")).toHaveCSS("animation-name", "ryvoko-avatar-spin");
   await captureScreenshot(page, testInfo, "group-avatar-active");
   await page.unroute("**/rpc/groups/list");
   await page.unroute("**/rpc/threads/get");

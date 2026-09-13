@@ -1,5 +1,5 @@
-import type { TaughtSkill } from "@rakazo/contracts";
-import { DEFAULT_COMPUTER_SCREEN, mapTeachPointer, teachCaptureKey } from "@rakazo/core";
+import type { TaughtSkill } from "@ryvoko/contracts";
+import { DEFAULT_COMPUTER_SCREEN, mapTeachPointer, teachCaptureKey } from "@ryvoko/core";
 import { useEffect, useRef } from "react";
 import { rpc } from "../../lib/rpc";
 

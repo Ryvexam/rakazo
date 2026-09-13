@@ -1,13 +1,13 @@
-import type { JobPublisher } from "@rakazo/adapter-kit";
-import { routineJobKey, routineWakeupJob } from "@rakazo/adapter-kit";
+import type { JobPublisher } from "@ryvoko/adapter-kit";
+import { routineJobKey, routineWakeupJob } from "@ryvoko/adapter-kit";
 import {
   cronFromPreset,
   isOneShotRoutineCron,
   isOneShotRoutineCrons,
   nextCronDate,
   ONCE_ROUTINE_CRON,
-} from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@ryvoko/core";
+import type { PrismaClient, ThreadEvents } from "@ryvoko/db";
 
 export { isOneShotRoutineCron, ONCE_ROUTINE_CRON };
 

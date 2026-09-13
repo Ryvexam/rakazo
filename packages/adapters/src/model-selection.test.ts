@@ -1,5 +1,5 @@
-import type { Actor } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { Actor } from "@ryvoko/contracts";
+import type { PrismaClient } from "@ryvoko/db";
 import { describe, expect, it, vi } from "vitest";
 import { selectConfiguredModel, validateConnectedModelChoice } from "./model-selection.js";
 

@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@ryvoko/contracts";
 import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,

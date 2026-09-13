@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { ONCE_ROUTINE_CRON } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { MessageBlock } from "@ryvoko/contracts";
+import { ONCE_ROUTINE_CRON } from "@ryvoko/core";
+import type { PrismaClient } from "@ryvoko/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendToolCompletionAudit,

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { ORPCError } from "@orpc/server";
-import type { AgentHomeStore, JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
+import type { AgentHomeStore, JobPublisher, SandboxProvider } from "@ryvoko/adapter-kit";
 import {
   type AdapterContext,
   runContinueJob,
   skillTeachingExpireJob,
   skillTeachingExpireJobKey,
-} from "@rakazo/adapter-kit";
+} from "@ryvoko/adapter-kit";
 import {
   acquireComputerExecutionLease,
   appendRecordingEvent,
@@ -30,8 +30,8 @@ import {
   screenLeaseIdForRun,
   type TeachComputerInput,
   teachingControlLeaseExpiresAt,
-} from "@rakazo/adapters";
-import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
+} from "@ryvoko/adapters";
+import type { Actor, MessageBlock, TaughtSkill } from "@ryvoko/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -39,14 +39,14 @@ import {
   type SkillPlaybook,
   type TeachRecordingEvent,
   teachRecordingTtlMs,
-} from "@rakazo/core";
+} from "@ryvoko/core";
 import {
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
   type PrismaClient,
   type ThreadEvents,
-} from "@rakazo/db";
+} from "@ryvoko/db";
 
 type TaughtSkillRow = {
   id: string;

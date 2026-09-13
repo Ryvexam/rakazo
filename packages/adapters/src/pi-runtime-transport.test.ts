@@ -37,7 +37,7 @@ describe("Pi runtime transport", () => {
         transport: "auto",
         headers: {
           "x-opencode-session": "thread-1:bot-1",
-          "x-opencode-client": "rakazo",
+          "x-opencode-client": "ryvoko",
           "X-Custom": "1",
         },
       });
@@ -52,7 +52,7 @@ describe("Pi runtime transport", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
     expect(result?.headers?.["x-opencode-session"]).toBe(result?.sessionId);
-    expect(result?.headers?.["x-opencode-client"]).toBe("rakazo");
+    expect(result?.headers?.["x-opencode-client"]).toBe("ryvoko");
   });
 
   it("keeps a stable conversation session id per bot thread", () => {

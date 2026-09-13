@@ -1,6 +1,6 @@
 import { Trans } from "@lingui/react/macro";
-import type { TaughtSkill } from "@rakazo/contracts";
-import { Button } from "@rakazo/ui-web";
+import type { TaughtSkill } from "@ryvoko/contracts";
+import { Button } from "@ryvoko/ui-web";
 import { useEffect, useState } from "react";
 
 export function formatRemaining(expiresAt: string | null): string {

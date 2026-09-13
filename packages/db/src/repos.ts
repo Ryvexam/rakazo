@@ -5,8 +5,8 @@ import {
   type BotSection,
   type MessageBlock,
   type SpaceBot,
-} from "@rakazo/contracts";
-import { userVisibleMessages } from "@rakazo/core";
+} from "@ryvoko/contracts";
+import { userVisibleMessages } from "@ryvoko/core";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";

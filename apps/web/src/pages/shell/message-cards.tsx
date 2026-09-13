@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { MessageBlock } from "@rakazo/contracts";
-import { abortableDelay } from "@rakazo/core";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
+import type { MessageBlock } from "@ryvoko/contracts";
+import { abortableDelay } from "@ryvoko/core";
+import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@ryvoko/ui-web";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { BuiCard, SuccessPop } from "../../components/ai/primitives";
@@ -130,7 +130,7 @@ export function AppConnectCard({
         displayName: block.name,
       });
       if (started.authorizationUrl) {
-        window.open(started.authorizationUrl, "rakazo-app-connect", "popup,width=560,height=720");
+        window.open(started.authorizationUrl, "ryvoko-app-connect", "popup,width=560,height=720");
       }
       for (let i = 0; i < 60; i += 1) {
         if (controller.signal.aborted) return;
@@ -224,7 +224,7 @@ function ChartCanvas({
     // Plot loads lazily so threads without charts never pay for the library.
     void (async () => {
       try {
-        const { buildPlotParts } = await import("@rakazo/core/plot");
+        const { buildPlotParts } = await import("@ryvoko/core/plot");
         if (cancelled || !ref.current) return;
         // Hover inspection by default: give the first mark a tooltip unless
         // the spec already asks for one somewhere.

@@ -8,13 +8,13 @@ import type {
   ModelCatalogEntry,
   ModelCredential,
   ThinkingLevel,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import {
   BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import {
   BotAvatar,
   Button,
@@ -24,7 +24,7 @@ import {
   Switch,
   Textarea,
   Toggle,
-} from "@rakazo/ui-web";
+} from "@ryvoko/ui-web";
 import { X } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
 import { rpc } from "../../lib/rpc";

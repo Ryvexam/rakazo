@@ -3,7 +3,7 @@ import type {
   ProductEvent,
   ThreadMessage,
   ThreadSnapshot,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import { describe, expect, it } from "vitest";
 import {
   activeThreadRuns,

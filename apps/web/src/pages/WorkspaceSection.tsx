@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Button } from "@rakazo/ui-web";
+import { Button } from "@ryvoko/ui-web";
 import { ChevronLeft, FileText, Folder } from "lucide-react";
 import { useState } from "react";
 

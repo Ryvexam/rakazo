@@ -1,6 +1,6 @@
-import type { JobPublisher, JobWorkerHost } from "@rakazo/adapter-kit";
-import { ComposioConnector, IntegrationProviderSettings } from "@rakazo/adapters";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import type { JobPublisher, JobWorkerHost } from "@ryvoko/adapter-kit";
+import { ComposioConnector, IntegrationProviderSettings } from "@ryvoko/adapters";
+import { loadRootEnv } from "@ryvoko/core/node/load-root-env";
 
 loadRootEnv();
 
@@ -42,12 +42,12 @@ import {
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   SpaceMemoryProviderResolver,
-} from "@rakazo/adapters";
-import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
-import { createDb, createThreadEvents } from "@rakazo/db";
-import { SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+} from "@ryvoko/adapters";
+import { resolveEncryptionKey, resolveSupervisorToken } from "@ryvoko/core";
+import { createDb, createThreadEvents } from "@ryvoko/db";
+import { SERVICE_NAMES } from "@ryvoko/logging";
+import { createRootLogger } from "@ryvoko/logging/axiom";
+import { MarkdownMemoryStore } from "@ryvoko/memory";
 
 const logger = createRootLogger(SERVICE_NAMES.worker);
 

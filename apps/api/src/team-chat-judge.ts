@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { AgentModelOAuthCredential, AgentRuntime } from "@rakazo/adapter-kit";
+import type { AgentModelOAuthCredential, AgentRuntime } from "@ryvoko/adapter-kit";
 import {
   type EncryptedSecretStore,
   resolveModelAuth,
   serializeModelSecret,
   toOAuthCredential,
-} from "@rakazo/adapters";
-import { findDefaultModelCredential, findModelCredential, type PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@ryvoko/adapters";
+import { findDefaultModelCredential, findModelCredential, type PrismaClient } from "@ryvoko/db";
+import { getLogger } from "@ryvoko/logging";
 
 const MAX_RULES_CHARS = 4_000;
 const MAX_MESSAGES = 20;

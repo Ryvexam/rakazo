@@ -8,7 +8,7 @@ import type {
   ArtifactStore,
   NotificationMessage,
   NotificationProvider,
-} from "@rakazo/adapter-kit";
+} from "@ryvoko/adapter-kit";
 
 const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 

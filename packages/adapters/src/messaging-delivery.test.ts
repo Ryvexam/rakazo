@@ -1,5 +1,5 @@
-import type { AdapterContext, MessagingSurface } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
+import type { AdapterContext, MessagingSurface } from "@ryvoko/adapter-kit";
+import type { PrismaClient } from "@ryvoko/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   applyMessagingOutboundStatus,

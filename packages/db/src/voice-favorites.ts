@@ -1,4 +1,4 @@
-import type { Actor, VoiceFavorite } from "@rakazo/contracts";
+import type { Actor, VoiceFavorite } from "@ryvoko/contracts";
 import { Prisma, type PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";

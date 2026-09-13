@@ -1,5 +1,5 @@
-import type { AvatarStyle } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, avatarIdentitySeed, organicAvatarPath } from "@rakazo/core";
+import type { AvatarStyle } from "@ryvoko/contracts";
+import { ACTIVE_RUN_STATUSES, avatarIdentitySeed, organicAvatarPath } from "@ryvoko/core";
 import { memo, useEffect } from "react";
 import { View } from "react-native";
 import Animated, {

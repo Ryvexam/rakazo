@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Me } from "@rakazo/contracts";
+import type { Me } from "@ryvoko/contracts";
 import {
   Button,
   Dialog,
@@ -7,7 +7,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@rakazo/ui-web";
+} from "@ryvoko/ui-web";
 import { useEffect, useState } from "react";
 import { desktopBridge } from "../lib/desktop";
 import { rpc } from "../lib/rpc";

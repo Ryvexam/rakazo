@@ -1,4 +1,4 @@
-import type { Actor } from "@rakazo/contracts";
+import type { Actor } from "@ryvoko/contracts";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
 import {

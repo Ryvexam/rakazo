@@ -1,8 +1,8 @@
 export const AUTONOMY_ROUTINE_NAME = "Autonomy";
-export const AUTONOMY_PROMPT_MARKER = "[rakazo-autonomy:v1]";
-export const OPPORTUNITY_MARKER = "[rakazo-opportunity:v1]";
-export const AUTONOMOUS_GOAL_MARKER = "[rakazo-autonomous-goal:v1]";
-export const USER_PROMOTED_GOAL_MARKER = "[rakazo-user-promoted-goal:v1]";
+export const AUTONOMY_PROMPT_MARKER = "[ryvoko-autonomy:v1]";
+export const OPPORTUNITY_MARKER = "[ryvoko-opportunity:v1]";
+export const AUTONOMOUS_GOAL_MARKER = "[ryvoko-autonomous-goal:v1]";
+export const USER_PROMOTED_GOAL_MARKER = "[ryvoko-user-promoted-goal:v1]";
 export const IDEA_PREFIX = "[idea] ";
 
 export type AutonomyMode = "off" | "continue" | "propose" | "autonomous";
@@ -159,7 +159,7 @@ MODE=${mode}
 MAX_AUTONOMOUS_GOALS_PER_DAY=${limits.maxGoalsPerDay}
 MAX_GOAL_CHAIN_DEPTH=${limits.maxChainDepth}
 
-You are running Rakazo's autonomous product loop for this bot.
+You are running Ryvoko's autonomous product loop for this bot.
 
 Durable work model
 - Use scratchpad_list with includeDone=true first. Treat non-idea open items as goals.
@@ -181,7 +181,7 @@ Execution environment
 - Inspect the existing environment before installing something new and prefer lightweight tools when they solve the task well.
 - Prefer project-local dependencies when that is the normal ecosystem convention, but global or system-level installation inside the configured bot computer is allowed when useful.
 - If a required tool is missing, acquire it and continue instead of stopping merely because the environment was incomplete.
-- This autonomy grant does not bypass hard technical restrictions imposed by Rakazo, unavailable credentials, or external services that require separate authentication.
+- This autonomy grant does not bypass hard technical restrictions imposed by Ryvoko, unavailable credentials, or external services that require separate authentication.
 
 Product reflection
 After completing a goal, or when no active goal exists, ask: "What product capability would naturally make what was just built more useful?"
@@ -210,11 +210,11 @@ ${AUTONOMOUS_GOAL_MARKER}
 sourceIdeaId=<the idea scratchpad id>
 depth=<the idea depth>
 - A newly autonomous idea must remain a direct extension of the current product area. Never create an endless chain of improvements.
-- Respect hard Rakazo security boundaries that the configured computer or connector actually enforces; do not invent extra approval prompts that are not required by the platform.
+- Respect hard Ryvoko security boundaries that the configured computer or connector actually enforces; do not invent extra approval prompts that are not required by the platform.
 
 Workspace
 - Use the bot's persistent workspace for durable working material when useful.
-- Keep agent-owned material under .rakazo/work, .rakazo/ideas, and .rakazo/journal where practical; keep project checkouts under projects and finished deliverables under artifacts.
+- Keep agent-owned material under .ryvoko/work, .ryvoko/ideas, and .ryvoko/journal where practical; keep project checkouts under projects and finished deliverables under artifacts.
 - Create these folders lazily when you actually need them; do not create empty structure just for appearance.
 - Keep temporary reasoning out of the workspace; save only useful plans, research, decisions, drafts, or deliverables.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@rakazo/core",
+  "name": "@ryvoko/core",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -45,7 +45,7 @@
     "test": "vitest run --root ../.. packages/core/src"
   },
   "dependencies": {
-    "@rakazo/contracts": "workspace:*",
+    "@ryvoko/contracts": "workspace:*",
     "dotenv": "17.4.2",
     "@observablehq/plot": "0.6.17",
     "d3-dsv": "3.0.1",

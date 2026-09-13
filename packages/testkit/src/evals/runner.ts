@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { type AgentRuntime, type JobPublisher, runJobKey } from "@rakazo/adapter-kit";
-import { MessagingTeamChatEmulator } from "@rakazo/adapters";
-import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
-import type { createDb } from "@rakazo/db";
+import { type AgentRuntime, type JobPublisher, runJobKey } from "@ryvoko/adapter-kit";
+import { MessagingTeamChatEmulator } from "@ryvoko/adapters";
+import type { ModelConnectInput, RunStatus } from "@ryvoko/contracts";
+import { ACTIVE_RUN_STATUSES, isTerminal } from "@ryvoko/core";
+import type { createDb } from "@ryvoko/db";
 import { sessionCookieHeader } from "../index.js";
 import type { EvalCase, Evidence } from "./cases.js";
 import { emptyTrial, type FailureCategory, redact, type TrialResult } from "./report.js";

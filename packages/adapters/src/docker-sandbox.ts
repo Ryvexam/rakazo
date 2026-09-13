@@ -15,9 +15,9 @@ import type {
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@rakazo/core";
-import { outgoingCorrelationHeaders } from "@rakazo/logging";
+} from "@ryvoko/adapter-kit";
+import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@ryvoko/core";
+import { outgoingCorrelationHeaders } from "@ryvoko/logging";
 import {
   boundedComputerActions,
   clampRounded,
@@ -124,12 +124,12 @@ export class DockerSandboxProvider implements SandboxProvider {
   private headers(context: AdapterContext, botId?: string) {
     return {
       authorization: `Bearer ${this.supervisorToken}`,
-      "x-rakazo-space-id": context.spaceId,
+      "x-ryvoko-space-id": context.spaceId,
       ...outgoingCorrelationHeaders(),
-      ...(botId ? { "x-rakazo-bot-id": botId } : {}),
-      ...(context.botId ? { "x-rakazo-screen-id": context.botId } : {}),
-      ...(context.screenLeaseId ? { "x-rakazo-screen-lease-id": context.screenLeaseId } : {}),
-      ...(context.cancelRunWork ? { "x-rakazo-cancel-run-work": "1" } : {}),
+      ...(botId ? { "x-ryvoko-bot-id": botId } : {}),
+      ...(context.botId ? { "x-ryvoko-screen-id": context.botId } : {}),
+      ...(context.screenLeaseId ? { "x-ryvoko-screen-lease-id": context.screenLeaseId } : {}),
+      ...(context.cancelRunWork ? { "x-ryvoko-cancel-run-work": "1" } : {}),
     };
   }
 
@@ -503,9 +503,9 @@ function requestDeadline(timeoutMs: number, message: string) {
 }
 
 function dockerCwd(cwd: string | undefined) {
-  if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/rakazo") return "/home/rakazo";
-  const relative = cwd.startsWith("/home/rakazo/")
-    ? cwd.slice("/home/rakazo/".length)
+  if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/ryvoko") return "/home/ryvoko";
+  const relative = cwd.startsWith("/home/ryvoko/")
+    ? cwd.slice("/home/ryvoko/".length)
     : normalizeWorkspacePath(cwd);
-  return path.posix.join("/home/rakazo", relative);
+  return path.posix.join("/home/ryvoko", relative);
 }

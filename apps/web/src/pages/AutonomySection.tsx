@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Routine, RunActivityRow } from "@rakazo/contracts";
-import { Button, NativeSelect, NativeSelectOption } from "@rakazo/ui-web";
+import type { Routine, RunActivityRow } from "@ryvoko/contracts";
+import { Button, NativeSelect, NativeSelectOption } from "@ryvoko/ui-web";
 import { Play } from "lucide-react";
 import { useEffect, useState } from "react";
 

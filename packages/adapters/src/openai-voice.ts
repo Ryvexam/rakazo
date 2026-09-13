@@ -8,7 +8,7 @@ import type {
   VoiceSynthesizeRequest,
   VoiceTranscribeRequest,
   VoiceVerifyResult,
-} from "@rakazo/adapter-kit";
+} from "@ryvoko/adapter-kit";
 import {
   readVoiceAudio,
   readVoiceJson,

@@ -5,8 +5,8 @@ import type {
   VoiceCredential,
   VoiceInfo,
   VoiceStatus,
-} from "@rakazo/contracts";
-import { visibleVoiceLibraryItems } from "@rakazo/core";
+} from "@ryvoko/contracts";
+import { visibleVoiceLibraryItems } from "@ryvoko/core";
 import {
   Button,
   Dialog,
@@ -18,7 +18,7 @@ import {
   Input,
   NativeSelect,
   NativeSelectOption,
-} from "@rakazo/ui-web";
+} from "@ryvoko/ui-web";
 import { XIcon } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { rpc } from "../lib/rpc";

@@ -14,8 +14,8 @@ import {
   runContinueJob,
   runJobKey,
   type SandboxProvider,
-} from "@rakazo/adapter-kit";
-import type { IntegrationProviderSettings } from "@rakazo/adapters";
+} from "@ryvoko/adapter-kit";
+import type { IntegrationProviderSettings } from "@ryvoko/adapters";
 import {
   acquireComputerExecutionLease,
   applyTeachingDesktopInput,
@@ -74,8 +74,8 @@ import {
   toComputerRef,
   touchRunningComputer,
   verifyMcpInstall,
-} from "@rakazo/adapters";
-import type { Auth } from "@rakazo/auth";
+} from "@ryvoko/adapters";
+import type { Auth } from "@ryvoko/auth";
 import {
   type Actor,
   appContract,
@@ -85,7 +85,7 @@ import {
   type Me,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   type SpaceNavigation,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   AttachmentValidationError,
@@ -94,7 +94,7 @@ import {
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   nextCronDateAcrossStrict,
-} from "@rakazo/core";
+} from "@ryvoko/core";
 import {
   appendEventInTransaction,
   CannotDeleteDefaultSpaceError,
@@ -140,8 +140,8 @@ import {
   touchGroupUpdatedAt,
   updateVoiceFavorite,
   VoiceFavoriteAlreadyExistsError,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@ryvoko/db";
+import { getLogger } from "@ryvoko/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
 import { createOwnedArtifact, getOwnedArtifact, getSpaceArtifact } from "./artifacts.js";

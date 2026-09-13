@@ -9,7 +9,7 @@ import type {
   ModelCredential,
   Space,
   SpaceNavigation,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import {
   isRunTerminalEvent,
   mergeThreadHistory,
@@ -23,7 +23,7 @@ import {
   takeLiveMessage,
   updateCloudAgentMessages,
   upsertMessageById,
-} from "@rakazo/core";
+} from "@ryvoko/core";
 import * as SecureStore from "expo-secure-store";
 import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoint";
 import { t } from "./i18n";
@@ -37,9 +37,9 @@ import {
   tokenFromAuthResponse,
 } from "./session";
 
-const ENDPOINT_KEY = "rakazo.api_base";
-const SPACE_KEY = "rakazo.space_id";
-const SPACE_ROLLBACK_KEY = "rakazo.space_rollback";
+const ENDPOINT_KEY = "ryvoko.api_base";
+const SPACE_KEY = "ryvoko.space_id";
+const SPACE_ROLLBACK_KEY = "ryvoko.space_rollback";
 const RPC_TIMEOUT_MS = 8_000;
 export const MAX_MOBILE_AUTH_RESPONSE_BYTES = 256 * 1024;
 export const MAX_MOBILE_RPC_RESPONSE_BYTES = 16 * 1024 * 1024;
@@ -354,7 +354,7 @@ export async function authHeaders(
   const token = await loadSessionToken();
   return {
     ...(token ? { authorization: `Bearer ${token}` } : {}),
-    ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
+    ...(spaceId ? { "x-ryvoko-space-id": spaceId } : {}),
   };
 }
 
@@ -380,7 +380,7 @@ async function authenticateWithEmail(
     `${currentApiBase()}/api/auth/${action}/email`,
     {
       method: "POST",
-      headers: { "content-type": "application/json", origin: "rakazo://" },
+      headers: { "content-type": "application/json", origin: "ryvoko://" },
       body: JSON.stringify(input),
     },
     {},
@@ -417,7 +417,7 @@ export type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: stri
 export async function passwordResetCapabilities(): Promise<PasswordResetCapabilities> {
   const { response, body } = await fetchMobileJson<PasswordResetCapabilities>(
     `${currentApiBase()}/api/auth/capabilities`,
-    { headers: { origin: "rakazo://" } },
+    { headers: { origin: "ryvoko://" } },
     { passwordReset: false, resetUrl: null },
   );
   if (!response.ok) throw new Error("Could not load password recovery settings");
@@ -429,7 +429,7 @@ export async function requestPasswordReset(email: string, redirectTo: string): P
     `${currentApiBase()}/api/auth/request-password-reset`,
     {
       method: "POST",
-      headers: { "content-type": "application/json", origin: "rakazo://" },
+      headers: { "content-type": "application/json", origin: "ryvoko://" },
       body: JSON.stringify({ email, redirectTo }),
     },
     {},
@@ -444,7 +444,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "ryvoko://",
         ...(await authHeaders()),
       },
       body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
@@ -493,7 +493,7 @@ export async function signOut() {
     await withAbort(
       fetch(`${currentApiBase()}/api/auth/sign-out`, {
         method: "POST",
-        headers: { "content-type": "application/json", origin: "rakazo://", ...headers },
+        headers: { "content-type": "application/json", origin: "ryvoko://", ...headers },
         signal: controller.signal,
       }),
       controller.signal,
@@ -532,7 +532,7 @@ export async function deleteAccount(password: string) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "ryvoko://",
         ...(await authHeaders()),
       },
       body: JSON.stringify({ password }),
@@ -567,13 +567,13 @@ export async function rpc<T>(
   // belongs to a stale request and must not touch the current selection.
   const requestSpaceGeneration = spaceSelectionGeneration;
   const requestHeaders = options.requestContext?.headers ?? (await authHeaders());
-  const requestSpaceId = requestHeaders["x-rakazo-space-id"];
+  const requestSpaceId = requestHeaders["x-ryvoko-space-id"];
   try {
     const res = await fetch(`${options.requestContext?.apiBase ?? currentApiBase()}/rpc/${proc}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "ryvoko://",
         ...requestHeaders,
       },
       body: JSON.stringify({ json: body }),
@@ -867,7 +867,7 @@ export async function subscribeThread(
     headers: {
       "content-type": "application/json",
       accept: "text/event-stream",
-      origin: "rakazo://",
+      origin: "ryvoko://",
       ...(await authHeaders()),
     },
     body: JSON.stringify({ json: { ...target, cursor } }),

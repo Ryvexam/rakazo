@@ -774,8 +774,8 @@ msgid "Choose a new password"
 msgstr "Yeni bir parola seçin"
 
 #: src/pages/ModelSettingsOverlay.tsx:364
-msgid "Choose which connected model Rakazo uses."
-msgstr "Rakazo'nun hangi bağlı modeli kullanacağını seç."
+msgid "Choose which connected model Ryvoko uses."
+msgstr "Ryvoko'nun hangi bağlı modeli kullanacağını seç."
 
 #: src/pages/shell/dialogs.tsx:255
 msgid "Clear"
@@ -1481,8 +1481,8 @@ msgid "Create space"
 msgstr ""
 
 #: src/pages/Auth.tsx:38
-msgid "Create your Rakazo"
-msgstr "Rakazo hesabını oluştur"
+msgid "Create your Ryvoko"
+msgstr "Ryvoko hesabını oluştur"
 
 #: src/components/AskCard.tsx:21
 msgid "Created"
@@ -2787,8 +2787,8 @@ msgid "Paste a replacement key"
 msgstr "Yeni bir anahtar yapıştır"
 
 #: src/pages/ModelSettingsOverlay.tsx:484
-msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
-msgstr "Sunucundaki OpenAI uyumlu adresi yapıştır. Gerekirse Rakazo /v1 ekler."
+msgid "Paste the OpenAI-compatible address from your server. Ryvoko adds /v1 if needed."
+msgstr "Sunucundaki OpenAI uyumlu adresi yapıştır. Gerekirse Ryvoko /v1 ekler."
 
 #: src/pages/VoiceSettingsOverlay.tsx:415
 msgid "Paste your API key"
@@ -3106,8 +3106,8 @@ msgid "Retry screen"
 msgstr ""
 
 #: src/pages/McpOAuthCallback.tsx:62
-msgid "Return to Rakazo"
-msgstr "Rakazo'ya dön"
+msgid "Return to Ryvoko"
+msgstr "Ryvoko'ya dön"
 
 #. placeholder {0}: doc.revision
 #: src/pages/KnowledgeSection.tsx:180
@@ -3403,8 +3403,8 @@ msgid "Sign in"
 msgstr "Oturum aç"
 
 #: src/pages/Auth.tsx:36
-msgid "Sign in to Rakazo"
-msgstr "Rakazo'da oturum aç"
+msgid "Sign in to Ryvoko"
+msgstr "Ryvoko'da oturum aç"
 
 #: src/pages/Auth.tsx:223
 #: src/pages/Welcome.tsx:32
@@ -3661,8 +3661,8 @@ msgid "This server is already connected. Disconnect it first to authorize again.
 msgstr "Bu sunucu zaten bağlı. Yeniden yetkilendirmek için önce bağlantısını kes."
 
 #: src/pages/ModelSettingsOverlay.tsx:806
-msgid "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider."
-msgstr "Bu abonelik girişi Rakazo'da henüz kullanılamıyor. Bir dağıtım kimlik bilgisi kullan veya başka bir sağlayıcı seç."
+msgid "This subscription sign-in is not available in Ryvoko yet. Use a deployment credential or choose another provider."
+msgstr "Bu abonelik girişi Ryvoko'da henüz kullanılamıyor. Bir dağıtım kimlik bilgisi kullan veya başka bir sağlayıcı seç."
 
 #: src/pages/RoutineSchedule.tsx:217
 msgid "Time of day"

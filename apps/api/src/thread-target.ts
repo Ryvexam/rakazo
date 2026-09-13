@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
-import { type JobPublisher, runContinueJob, type SandboxProvider } from "@rakazo/adapter-kit";
-import { cancelComputerRunWork, screenLeaseIdForRun, toComputerRef } from "@rakazo/adapters";
+import { type JobPublisher, runContinueJob, type SandboxProvider } from "@ryvoko/adapter-kit";
+import { cancelComputerRunWork, screenLeaseIdForRun, toComputerRef } from "@ryvoko/adapters";
 import {
   type Actor,
   GROUP_MEMBER_MIN,
@@ -9,14 +9,14 @@ import {
   type MessageReaction,
   type RunStatus,
   type ThreadSnapshot,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   isActive,
   projectMessages,
   resolveGroupTargetBotIds,
   runFailureError,
-} from "@rakazo/core";
+} from "@ryvoko/core";
 import {
   appendEventInTransaction,
   createGroupRepos,
@@ -29,8 +29,8 @@ import {
   type PrismaClient,
   type ThreadEvents,
   touchGroupUpdatedAt,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@ryvoko/db";
+import { getLogger } from "@ryvoko/logging";
 import {
   buildSendPrompt,
   buildUserMessageBlocks,

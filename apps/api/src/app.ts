@@ -10,7 +10,7 @@ import type {
   RealtimeFanout,
   SandboxProvider,
   TransactionalEmailProvider,
-} from "@rakazo/adapter-kit";
+} from "@ryvoko/adapter-kit";
 import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
@@ -60,16 +60,16 @@ import {
   SmtpEmailProvider,
   SpaceMemoryProviderResolver,
   toTeamChatInbound,
-} from "@rakazo/adapters";
-import { blockedAuthPaths, createAuth } from "@rakazo/auth";
-import { signupPolicyFromEnv } from "@rakazo/core";
+} from "@ryvoko/adapters";
+import { blockedAuthPaths, createAuth } from "@ryvoko/auth";
+import { signupPolicyFromEnv } from "@ryvoko/core";
 import {
   createDb,
   createThreadEvents,
   type PrismaClient,
   provisionMessagingIdentity,
   requireMembership,
-} from "@rakazo/db";
+} from "@ryvoko/db";
 import {
   createServiceLogger,
   enrichLogContext,
@@ -77,9 +77,9 @@ import {
   installLogger,
   type Logger,
   SERVICE_NAMES,
-} from "@rakazo/logging";
-import { requestLogging } from "@rakazo/logging/hono";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+} from "@ryvoko/logging";
+import { requestLogging } from "@ryvoko/logging/hono";
+import { MarkdownMemoryStore } from "@ryvoko/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
@@ -290,7 +290,7 @@ export async function createApp(
     email,
     onEmailError: (error) => getLogger().error("transactional email delivery failed", error),
     extraOrigins: [
-      "rakazo://",
+      "ryvoko://",
       "exp://",
       "exp://*",
       "http://localhost:8081",
@@ -478,7 +478,7 @@ export async function createApp(
   mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    const requestedSpaceId = c.req.header("x-rakazo-space-id");
+    const requestedSpaceId = c.req.header("x-ryvoko-space-id");
     const actor = session?.user
       ? await requireMembership(prisma, session.user.id, requestedSpaceId).catch(() => null)
       : null;
@@ -498,7 +498,7 @@ export async function createApp(
     const actor = await requireMembership(
       prisma,
       session.user.id,
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-ryvoko-space-id"),
     ).catch(() => null);
     if (actor) enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     return actor;
@@ -834,7 +834,7 @@ export async function createApp(
 function isTrustedOrigin(origin: string, env: AppEnv) {
   if (!origin) return true;
   if (origin === env.webOrigin || origin === env.apiUrl || origin === env.authUrl) return true;
-  if (origin.startsWith("rakazo://") || origin.startsWith("exp://")) return true;
+  if (origin.startsWith("ryvoko://") || origin.startsWith("exp://")) return true;
   try {
     const host = new URL(origin).hostname;
     return isLoopbackHost(host);

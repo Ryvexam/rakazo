@@ -1,8 +1,8 @@
 const OAUTH_POPUP_NAMES = new Set([
-  "rakazo-app-connect",
-  "rakazo-mcp-oauth",
-  "rakazo-model-oauth",
-  "rakazo-plugin-connect",
+  "ryvoko-app-connect",
+  "ryvoko-mcp-oauth",
+  "ryvoko-model-oauth",
+  "ryvoko-plugin-connect",
 ]);
 
 export function shouldOpenInAppPopup(

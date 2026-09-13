@@ -1,18 +1,18 @@
-import type { RealtimeFanout } from "@rakazo/adapter-kit";
+import type { RealtimeFanout } from "@ryvoko/adapter-kit";
 import {
   type BotSecretDestination,
   type MessageBlock,
   MessageBlock as MessageBlockSchema,
   type ProductEvent,
-} from "@rakazo/contracts";
+} from "@ryvoko/contracts";
 import {
   blocksToAgentHistoryText,
   isApprovalAskBlock,
   isSecretAskBlock,
   messagingChannelId,
   sanitizeJsonValue,
-} from "@rakazo/core";
-import { getLogger } from "@rakazo/logging";
+} from "@ryvoko/core";
+import { getLogger } from "@ryvoko/logging";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";

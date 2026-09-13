@@ -1,4 +1,4 @@
-import { visibleVoiceLibraryItems } from "@rakazo/core";
+import { visibleVoiceLibraryItems } from "@ryvoko/core";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {

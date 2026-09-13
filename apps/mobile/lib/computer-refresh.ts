@@ -1,4 +1,4 @@
-import type { ComputerStatus } from "@rakazo/contracts";
+import type { ComputerStatus } from "@ryvoko/contracts";
 
 /** One polling lifecycle per mounted computer target. Explicit refreshes supersede older reads. */
 export function createComputerRefresh(options: {

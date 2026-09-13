@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerabilities
-    url: https://github.com/elie222/rakazo/blob/main/SECURITY.md
-    about: Report security issues to security@rakazo.com — do not open a public issue.
+    url: https://github.com/Ryvexam/ryvoko/blob/main/SECURITY.md
+    about: Report security issues to security@ryvoko.com — do not open a public issue.
   - name: User support
-    url: mailto:support@rakazo.com
-    about: Questions about using Rakazo or self-hosting help.
+    url: mailto:support@ryvoko.com
+    about: Questions about using Ryvoko or self-hosting help.
   - name: Maintainer
-    url: mailto:elie@rakazo.com
+    url: mailto:elie@ryvoko.com
     about: Reach the maintainer directly.

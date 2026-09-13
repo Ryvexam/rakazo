@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@ryvoko/contracts";
 import {
   type CronFreq,
   type CronPreset,
@@ -9,7 +9,7 @@ import {
   formatCron,
   isOneShotRoutineCrons,
   presetFromCron,
-} from "@rakazo/core";
+} from "@ryvoko/core";
 import {
   Button,
   DropdownMenu,
@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
   Input,
   Textarea,
-} from "@rakazo/ui-web";
+} from "@ryvoko/ui-web";
 import { ChevronLeft, Clock, GitBranch, Globe, MessageSquare, Pause, Plus, X } from "lucide-react";
 import { useId } from "react";
 import { RoutineSchedule } from "./RoutineSchedule";

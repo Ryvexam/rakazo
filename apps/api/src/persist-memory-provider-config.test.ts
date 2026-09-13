@@ -1,5 +1,5 @@
-import { MemoryProviderDeploymentOwnerRequiredError } from "@rakazo/adapters";
-import type { PrismaClient } from "@rakazo/db";
+import { MemoryProviderDeploymentOwnerRequiredError } from "@ryvoko/adapters";
+import type { PrismaClient } from "@ryvoko/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   disconnectMemoryProvider,

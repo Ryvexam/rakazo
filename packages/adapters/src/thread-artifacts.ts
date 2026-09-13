@@ -5,16 +5,16 @@ import type {
   ArtifactStore,
   ComputerRef,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import type { ComputerMode, MessageBlock } from "@rakazo/contracts";
-import { ATTACHMENT_MAX_BYTES } from "@rakazo/contracts";
+} from "@ryvoko/adapter-kit";
+import type { ComputerMode, MessageBlock } from "@ryvoko/contracts";
+import { ATTACHMENT_MAX_BYTES } from "@ryvoko/contracts";
 import {
   attachmentExtensionForMimeType,
   inferAttachmentMimeType,
   messageBlockForArtifact,
   validateAttachmentMimeType,
-} from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@ryvoko/core";
+import type { PrismaClient } from "@ryvoko/db";
 import { resolveBotWorkspacePath } from "./computer-support.js";
 
 export type MaterializedThreadFile = {

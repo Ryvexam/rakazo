@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { blocksToAgentHistoryText, messageReaction } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { MessageBlock } from "@ryvoko/contracts";
+import { blocksToAgentHistoryText, messageReaction } from "@ryvoko/core";
+import type { PrismaClient } from "@ryvoko/db";
 
 type QuotedMessage = { id: string; threadId: string; role: string; blocks: unknown };
 type ReplyMessage = QuotedMessage & {
