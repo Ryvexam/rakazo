@@ -631,6 +631,18 @@ msgstr "要关联的 Bot"
 msgid "Bot voices"
 msgstr ""
 
+#: src/pages/Shell.tsx:5179
+msgid "Bot: Autonomy"
+msgstr ""
+
+#: src/pages/Shell.tsx:5177
+msgid "Bot: Goals"
+msgstr ""
+
+#: src/pages/Shell.tsx:5181
+msgid "Bot: New routine"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:115
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操作时，才添加例外。"

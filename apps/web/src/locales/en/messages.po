@@ -631,6 +631,18 @@ msgstr "Bot to link"
 msgid "Bot voices"
 msgstr "Bot voices"
 
+#: src/pages/Shell.tsx:5179
+msgid "Bot: Autonomy"
+msgstr "Bot: Autonomy"
+
+#: src/pages/Shell.tsx:5177
+msgid "Bot: Goals"
+msgstr "Bot: Goals"
+
+#: src/pages/Shell.tsx:5181
+msgid "Bot: New routine"
+msgstr "Bot: New routine"
+
 #: src/components/ApprovalRulesSettings.tsx:115
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots act without asking by default. Add an exception only when you want to review a type of action first."

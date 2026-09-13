@@ -631,6 +631,18 @@ msgstr "Bot a vincular"
 msgid "Bot voices"
 msgstr ""
 
+#: src/pages/Shell.tsx:5179
+msgid "Bot: Autonomy"
+msgstr ""
+
+#: src/pages/Shell.tsx:5177
+msgid "Bot: Goals"
+msgstr ""
+
+#: src/pages/Shell.tsx:5181
+msgid "Bot: New routine"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:115
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Los bots actúan sin preguntar de forma predeterminada. Agrega una excepción solo cuando quieras revisar primero un tipo de acción."

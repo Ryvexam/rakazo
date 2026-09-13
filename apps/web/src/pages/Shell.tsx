@@ -5173,6 +5173,12 @@ function slashActionLabel(id: SlashActionId) {
       return t`Settings: General`;
     case "settings-usage":
       return t`Settings: Usage`;
+    case "bot-goals":
+      return t`Bot: Goals`;
+    case "bot-autonomy":
+      return t`Bot: Autonomy`;
+    case "bot-routine":
+      return t`Bot: New routine`;
   }
 }
 
