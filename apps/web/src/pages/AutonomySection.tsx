@@ -17,8 +17,8 @@ import {
   heartbeatFromCrons,
   isAutonomyPrompt,
   MAX_AUTONOMOUS_GOALS_OPTIONS,
-  type MaxAutonomousGoalsPerDay,
   MAX_GOAL_CHAIN_DEPTH_OPTIONS,
+  type MaxAutonomousGoalsPerDay,
   type MaxGoalChainDepth,
   parseAutonomyLimits,
   parseAutonomyMode,
@@ -208,9 +208,12 @@ export function AutonomySection({ botId }: { botId: string }) {
 
       {mode === "autonomous" ? (
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <label className="text-[12px] text-muted-foreground">
-            <Trans>Goals per day</Trans>
+          <div className="text-[12px] text-muted-foreground">
+            <label htmlFor="autonomy-goals-per-day">
+              <Trans>Goals per day</Trans>
+            </label>
             <NativeSelect
+              id="autonomy-goals-per-day"
               aria-label={t`Goals per day`}
               className="mt-1 w-full"
               value={String(maxGoalsPerDay)}
@@ -224,10 +227,13 @@ export function AutonomySection({ botId }: { botId: string }) {
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-          </label>
-          <label className="text-[12px] text-muted-foreground">
-            <Trans>Chain depth</Trans>
+          </div>
+          <div className="text-[12px] text-muted-foreground">
+            <label htmlFor="autonomy-chain-depth">
+              <Trans>Chain depth</Trans>
+            </label>
             <NativeSelect
+              id="autonomy-chain-depth"
               aria-label={t`Chain depth`}
               className="mt-1 w-full"
               value={String(maxChainDepth)}
@@ -241,7 +247,7 @@ export function AutonomySection({ botId }: { botId: string }) {
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-          </label>
+          </div>
         </div>
       ) : null}
 
