@@ -250,6 +250,7 @@ describe("sandbox supervisor input containment", () => {
     const helper = workspaceFileAccessPython();
     expect(helper).toContain("O_NOFOLLOW");
     expect(helper).toContain("/proc/self/fd/");
+    expect(helper).toContain("F_GETPATH");
     const script = [
       "import os, tempfile",
       helper,
