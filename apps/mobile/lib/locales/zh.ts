@@ -434,6 +434,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Speak message": "朗读消息",
   Speak: "朗读",
   "Speak only": "仅朗读",
+  "Speak replies aloud with ElevenLabs, OpenAI, Cartesia, or Fish Audio":
+    "使用 ElevenLabs、OpenAI、Cartesia 或 Fish Audio 朗读回复",
   Starting: "正在启动",
   "Starting…": "正在启动…",
   Stop: "停止",
