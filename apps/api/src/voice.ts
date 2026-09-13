@@ -10,7 +10,7 @@ import {
   NoVoiceConfigured,
   voiceCatalogEntry,
 } from "@rakazo/adapters";
-import type { Actor, VoiceCredential, VoiceStatus } from "@rakazo/contracts";
+import type { Actor, VoiceCredential, VoiceInfo, VoiceStatus } from "@rakazo/contracts";
 import { toUtterances } from "@rakazo/core";
 import {
   deleteUnreferencedCredentialSecret,
@@ -36,6 +36,47 @@ export { listVoiceCatalog };
 const SPEAK_TIMEOUT_MS = 60_000;
 export const MAX_SPEAK_REQUEST_BYTES = 16 * 1024;
 export const MAX_TRANSCRIBE_REQUEST_BYTES = 4 * Math.ceil(MAX_TRANSCRIBE_BYTES / 3) + 1024;
+
+/** Filter and page a full listVoices catalog for providers without searchVoices. */
+export function pageListedVoices(
+  items: VoiceInfo[],
+  options: { query?: string; page: number; pageSize: number; language?: string },
+): { items: VoiceInfo[]; nextPage?: number } {
+  const query = options.query?.trim().toLowerCase();
+  const language = options.language?.trim().toLowerCase();
+  let filtered = items;
+  if (query) {
+    filtered = filtered.filter((voice) => {
+      const haystack = [voice.id, voice.label, voice.description, voice.author?.name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+  if (language) {
+    filtered = filtered.filter((voice) =>
+      voice.languages?.some((entry) => entry.toLowerCase().includes(language)),
+    );
+  }
+  const start = (options.page - 1) * options.pageSize;
+  const pageItems = filtered.slice(start, start + options.pageSize);
+  const nextPage = start + options.pageSize < filtered.length ? options.page + 1 : undefined;
+  return nextPage === undefined ? { items: pageItems } : { items: pageItems, nextPage };
+}
+
+/** Keep a prior label only when reconnecting without changing the voice id. */
+export function resolvePersistedVoiceLabel(input: {
+  explicitVoiceId: string;
+  lookedUpLabel: string | null;
+  previousVoiceId?: string;
+  previousVoiceLabel?: string | null;
+}): string | null {
+  const changed =
+    Boolean(input.explicitVoiceId) && input.explicitVoiceId !== (input.previousVoiceId ?? "");
+  if (changed) return input.lookedUpLabel;
+  return input.lookedUpLabel ?? input.previousVoiceLabel ?? null;
+}
 
 export function voiceContext(actor: Actor, signal?: AbortSignal): AdapterContext {
   return {
@@ -227,7 +268,12 @@ export async function persistVoiceCredential(
             })
           : null;
         const selectedVoiceId = voiceId || previousPreference?.voiceId || "";
-        const selectedVoiceLabel = voiceLabel ?? previousPreference?.voiceLabel ?? null;
+        const selectedVoiceLabel = resolvePersistedVoiceLabel({
+          explicitVoiceId: input.voiceId?.trim() ?? "",
+          lookedUpLabel: voiceLabel,
+          previousVoiceId: previousPreference?.voiceId,
+          previousVoiceLabel: previousPreference?.voiceLabel,
+        });
         const selectedModelId =
           requestedModelId ??
           previousPreference?.modelId ??

@@ -86,6 +86,10 @@ describe("voice favorites", () => {
         position: 3,
       },
     });
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: "Serializable" }),
+    );
   });
 
   it("rejects updates for favorites outside the actor scope", async () => {

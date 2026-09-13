@@ -1,6 +1,7 @@
 import type { Actor, VoiceFavorite } from "@rakazo/contracts";
-import type { PrismaClient } from "./client.js";
+import { Prisma, type PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
+import { withTransactionRetry } from "./transaction-retry.js";
 
 export class VoiceFavoriteAlreadyExistsError extends Error {
   constructor() {
@@ -90,22 +91,28 @@ export async function createVoiceFavorite(
   const voiceId = input.voiceId.trim();
   const label = normalizeLabel(input.label);
   try {
-    const row = await prisma.$transaction(async (tx) => {
-      const aggregate = await tx.voiceFavorite.aggregate({
-        where: favoriteWhere(actor),
-        _max: { position: true },
-      });
-      return tx.voiceFavorite.create({
-        data: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          provider,
-          voiceId,
-          label: label ?? null,
-          position: (aggregate._max.position ?? -1) + 1,
+    // Serialize position allocation the same way space membership writes do.
+    const row = await withTransactionRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const aggregate = await tx.voiceFavorite.aggregate({
+            where: favoriteWhere(actor),
+            _max: { position: true },
+          });
+          return tx.voiceFavorite.create({
+            data: {
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              provider,
+              voiceId,
+              label: label ?? null,
+              position: (aggregate._max.position ?? -1) + 1,
+            },
+          });
         },
-      });
-    });
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
     return toVoiceFavorite(row);
   } catch (error) {
     if (isUniqueViolation(error)) throw new VoiceFavoriteAlreadyExistsError();

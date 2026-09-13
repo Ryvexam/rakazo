@@ -5,6 +5,8 @@ import {
   MAX_SPEAK_REQUEST_BYTES,
   MAX_TRANSCRIBE_REQUEST_BYTES,
   mountVoiceHttpRoutes,
+  pageListedVoices,
+  resolvePersistedVoiceLabel,
   toVoiceStatus,
   type VoiceDeps,
 } from "./voice.js";
@@ -132,5 +134,56 @@ describe("voice HTTP routes", () => {
 
     expect(response.status).toBe(413);
     expect(cancel).toHaveBeenCalledOnce();
+  });
+});
+
+describe("pageListedVoices", () => {
+  const voices = [
+    { id: "alpha", label: "Alpha", description: "bright", languages: ["en"] },
+    { id: "bravo", label: "Bravo", description: "warm", languages: ["fr"] },
+    { id: "charlie", label: "Charlie", description: "deep", languages: ["en"] },
+  ];
+
+  it("filters by query and pages the remaining voices", () => {
+    expect(pageListedVoices(voices, { query: "a", page: 1, pageSize: 2 })).toEqual({
+      items: [
+        { id: "alpha", label: "Alpha", description: "bright", languages: ["en"] },
+        { id: "bravo", label: "Bravo", description: "warm", languages: ["fr"] },
+      ],
+      nextPage: 2,
+    });
+    expect(pageListedVoices(voices, { query: "a", page: 2, pageSize: 2 })).toEqual({
+      items: [{ id: "charlie", label: "Charlie", description: "deep", languages: ["en"] }],
+    });
+  });
+
+  it("filters by language without inventing a next page", () => {
+    expect(pageListedVoices(voices, { page: 1, pageSize: 10, language: "fr" })).toEqual({
+      items: [{ id: "bravo", label: "Bravo", description: "warm", languages: ["fr"] }],
+    });
+  });
+});
+
+describe("resolvePersistedVoiceLabel", () => {
+  it("drops the previous label when the explicit voice id changes", () => {
+    expect(
+      resolvePersistedVoiceLabel({
+        explicitVoiceId: "voice-b",
+        lookedUpLabel: null,
+        previousVoiceId: "voice-a",
+        previousVoiceLabel: "Old voice",
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps the previous label when reconnecting the same voice id", () => {
+    expect(
+      resolvePersistedVoiceLabel({
+        explicitVoiceId: "voice-a",
+        lookedUpLabel: null,
+        previousVoiceId: "voice-a",
+        previousVoiceLabel: "Saved voice",
+      }),
+    ).toBe("Saved voice");
   });
 });

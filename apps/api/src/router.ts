@@ -197,6 +197,7 @@ import {
   listVoiceCatalog,
   loadDefaultVoiceCredential,
   loadVoiceCredential,
+  pageListedVoices,
   persistVoiceCredential,
   prepareVoice,
   toVoiceCredential,
@@ -1028,8 +1029,11 @@ export function createRouter(deps: RouterDeps) {
           voiceLabel: existing.voiceLabel ?? null,
         };
         if (voiceUpdateRequested) {
-          const resetVoice =
-            input.voiceId === null && input.voiceProvider === null && input.voiceModelId === null;
+          // voiceId: null (or an explicit provider clear) is a full voice reset.
+          // Do not fall through to `input.voiceId ?? existing.voiceId`, which would
+          // restore a cleared assignment, and do not invent a default provider when
+          // the client sent voiceProvider: null.
+          const resetVoice = input.voiceId === null || input.voiceProvider === null;
           if (resetVoice) {
             voiceData = {
               voiceId: null,
@@ -4668,15 +4672,19 @@ export function createRouter(deps: RouterDeps) {
         let voiceLabel: string | null | undefined =
           input.voiceLabel !== undefined ? input.voiceLabel?.trim() || null : undefined;
         if (voiceLabel === undefined) {
-          const provider = createVoiceProvider(loaded.cred.provider);
-          const adapterContext = voiceContext(context.actor, context.signal);
-          const resolved = provider.getVoice
-            ? (await provider.getVoice(loaded.apiKey, input.voiceId, adapterContext))?.label
-            : (await provider.listVoices(loaded.apiKey, adapterContext)).find(
-                (voice) => voice.id === input.voiceId,
-              )?.label;
-          // Keep the stored label when lookup fails (e.g. model-only updates).
-          if (resolved) voiceLabel = resolved;
+          try {
+            const provider = createVoiceProvider(loaded.cred.provider);
+            const adapterContext = voiceContext(context.actor, context.signal);
+            const resolved = provider.getVoice
+              ? (await provider.getVoice(loaded.apiKey, input.voiceId, adapterContext))?.label
+              : (await provider.listVoices(loaded.apiKey, adapterContext)).find(
+                  (voice) => voice.id === input.voiceId,
+                )?.label;
+            // Keep the stored label when lookup misses (e.g. model-only updates).
+            if (resolved) voiceLabel = resolved;
+          } catch {
+            // Provider outage must not block model-only preference updates.
+          }
         }
         const cred = await withSerializableRetry(() =>
           deps.prisma.$transaction(
@@ -4718,11 +4726,16 @@ export function createRouter(deps: RouterDeps) {
         if (!row) return { items: [] };
         const provider = createVoiceProvider(row.cred.provider);
         if (!provider.searchVoices) {
-          const items = await provider.listVoices(
+          const listed = await provider.listVoices(
             row.apiKey,
             voiceContext(context.actor, context.signal),
           );
-          return { items };
+          return pageListedVoices(listed, {
+            query: input.query,
+            page: input.page,
+            pageSize: input.pageSize,
+            language: input.language,
+          });
         }
         const contextForSearch = voiceContext(context.actor, context.signal);
         const pages = await Promise.all(

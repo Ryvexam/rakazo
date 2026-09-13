@@ -116,12 +116,20 @@ export default function VoiceSettings() {
 
   useEffect(() => {
     if (!credential || !provider) return;
+    let cancelled = false;
     const timer = setTimeout(() => {
       void searchVoiceLibrary(provider, voiceQuery)
-        .then(setVoiceResults)
-        .catch(() => setVoiceResults([]));
+        .then((items) => {
+          if (!cancelled) setVoiceResults(items);
+        })
+        .catch(() => {
+          if (!cancelled) setVoiceResults([]);
+        });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [credential, provider, voiceQuery]);
 
   const visibleVoiceItems = useMemo(() => {
@@ -524,9 +532,9 @@ export default function VoiceSettings() {
                     key={bot.id}
                     accessibilityRole="button"
                     accessibilityLabel={`${bot.name}: ${label}`}
-                    disabled={botVoicePending !== null || !voices.length}
+                    disabled={botVoicePending !== null}
                     onPress={() => openBotVoicePicker(bot)}
-                    style={[styles.botVoiceRow, !voices.length && styles.disabled]}
+                    style={styles.botVoiceRow}
                   >
                     <Text style={styles.voiceLabel}>{bot.name}</Text>
                     <Text style={styles.botVoiceValue}>{label}</Text>

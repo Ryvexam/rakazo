@@ -163,14 +163,24 @@ export function VoiceSettingsOverlay({
 
   useEffect(() => {
     if (!credential || !provider) return;
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       setVoiceLibraryPending(true);
       void searchVoiceLibrary(provider, voiceQuery)
-        .then(setVoiceResults)
-        .catch(() => setVoiceResults([]))
-        .finally(() => setVoiceLibraryPending(false));
+        .then((items) => {
+          if (!cancelled) setVoiceResults(items);
+        })
+        .catch(() => {
+          if (!cancelled) setVoiceResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setVoiceLibraryPending(false);
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [credential, provider, voiceQuery]);
 
   async function connectKey() {
