@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type VoiceLibraryItem, visibleVoiceLibraryItems } from "./voice-library.js";
+import type { VoiceLibraryItem } from "./voice-library.js";
+import { visibleVoiceLibraryItems } from "./voice-library.js";
 
 const favorites: VoiceLibraryItem[] = [
   { id: "fav-only", label: "Saved Favorite", alias: "Nick", favoriteId: "f1" },
