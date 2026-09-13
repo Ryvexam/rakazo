@@ -137,9 +137,7 @@ export function WorkspaceSection({ botId }: { botId: string }) {
                 type="button"
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-accent"
                 onClick={() =>
-                  entry.kind === "dir"
-                    ? void loadDirectory(entry.path)
-                    : void openFile(entry.path)
+                  entry.kind === "dir" ? void loadDirectory(entry.path) : void openFile(entry.path)
                 }
               >
                 {entry.kind === "dir" ? <Folder size={14} /> : <FileText size={14} />}
