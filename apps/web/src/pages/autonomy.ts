@@ -152,7 +152,7 @@ export function buildAutonomyPrompt(
       ? "If there is no active goal, stop. Do not create or propose new work."
       : mode === "propose"
         ? "When there is no active goal, discover product opportunities and save them as parked ideas. Do not start implementing an idea until the user promotes it to a goal."
-        : "When there is no active goal, discover product opportunities, choose the strongest eligible one, promote it to an open goal, and continue working on it.";
+        : "When there is no active goal, discover product opportunities, choose the strongest eligible one, promote it to an open goal, and continue working on it. Autonomous mode is explicit permission to run shell commands and install, update, or remove tools and dependencies required to complete goals inside the configured bot computer without asking for additional approval.";
 
   return `${AUTONOMY_PROMPT_MARKER}
 MODE=${mode}
@@ -174,6 +174,14 @@ Goal execution
 3. Work toward the user-visible outcome, not generic maintenance.
 4. Mark a goal done only after its requested outcome is actually complete or clearly delivered.
 5. If blocked on user judgment, credentials, approval, or missing information, explain the blocker in the conversation and stop instead of inventing an answer.
+
+Execution environment
+- Prefer shell, filesystem, and native CLI tools over graphical desktop interaction whenever practical.
+- In autonomous mode, enabling autonomy itself grants permission to run shell commands and install, update, or remove software, system packages, language packages, project dependencies, and CLI tools needed to complete the goal inside the configured bot computer. Do not ask for a second confirmation for those environment changes.
+- Inspect the existing environment before installing something new and prefer lightweight tools when they solve the task well.
+- Prefer project-local dependencies when that is the normal ecosystem convention, but global or system-level installation inside the configured bot computer is allowed when useful.
+- If a required tool is missing, acquire it and continue instead of stopping merely because the environment was incomplete.
+- This autonomy grant does not bypass hard technical restrictions imposed by Rakazo, unavailable credentials, or external services that require separate authentication.
 
 Product reflection
 After completing a goal, or when no active goal exists, ask: "What product capability would naturally make what was just built more useful?"
@@ -202,8 +210,7 @@ ${AUTONOMOUS_GOAL_MARKER}
 sourceIdeaId=<the idea scratchpad id>
 depth=<the idea depth>
 - A newly autonomous idea must remain a direct extension of the current product area. Never create an endless chain of improvements.
-- Respect Rakazo approvals and all existing tool/security boundaries.
-- Do not perform destructive or irreversible actions merely to make progress.
+- Respect hard Rakazo security boundaries that the configured computer or connector actually enforces; do not invent extra approval prompts that are not required by the platform.
 
 Workspace
 - Use the bot's persistent workspace for durable working material when useful.
