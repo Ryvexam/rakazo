@@ -169,13 +169,9 @@ export function ScratchpadSection({ botId }: { botId: string }) {
         itemId: item.id,
         title: goalTitle(item.title),
         status: "open",
-        notes: [item.notes.trim(), "Promoted from product discovery."]
-          .filter(Boolean)
-          .join("\n\n"),
+        notes: [item.notes.trim(), "Promoted from product discovery."].filter(Boolean).join("\n\n"),
       });
-      setItems((current) =>
-        current.map((entry) => (entry.id === updated.id ? updated : entry)),
-      );
+      setItems((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
     } catch {
       setError(t`Could not update`);
     } finally {
@@ -469,21 +465,11 @@ export function ScratchpadSection({ botId }: { botId: string }) {
           </div>
         ) : null}
         <div className="mt-3 flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => void saveAutonomy()}
-          >
+          <Button variant="secondary" size="sm" disabled={busy} onClick={() => void saveAutonomy()}>
             <Trans>Save</Trans>
           </Button>
           {autonomyRoutine?.active ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => void runAutonomyNow()}
-            >
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void runAutonomyNow()}>
               <Play size={14} />
               <Trans>Run now</Trans>
             </Button>
