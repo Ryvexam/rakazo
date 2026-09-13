@@ -260,7 +260,7 @@ export function AutonomySection({ botId }: { botId: string }) {
 
       <div className="mt-3 flex gap-2">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => void save()}>
-          <Trans>Save</Trans>
+          <Trans>Save autonomy</Trans>
         </Button>
         {routine?.active ? (
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => void runNow()}>
