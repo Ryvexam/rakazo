@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   AUTONOMOUS_GOAL_MARKER,
   autonomyCron,
+  autonomyLimitError,
   buildAutonomousPromotedGoalNotes,
   buildAutonomyPrompt,
   buildUserPromotedGoalNotes,
+  countAutonomousGoalsForUtcDay,
+  ensureAutonomousPromotedGoalNotes,
   exceedsGoalChainDepth,
   goalTitle,
   heartbeatFromCrons,
   ideaTitle,
   isAutonomyPrompt,
   isIdeaTitle,
+  isIntroducingAutonomousGoal,
   OPPORTUNITY_MARKER,
   parseAutonomyLimits,
   parseAutonomyMode,
@@ -18,10 +22,6 @@ import {
   SCRATCHPAD_NOTES_MAX,
   USER_PROMOTED_GOAL_MARKER,
   visibleWorkNotes,
-  autonomyLimitError,
-  countAutonomousGoalsForUtcDay,
-  ensureAutonomousPromotedGoalNotes,
-  isIntroducingAutonomousGoal,
 } from "./autonomy.js";
 
 describe("autonomy helpers", () => {

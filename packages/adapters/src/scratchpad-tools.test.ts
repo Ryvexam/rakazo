@@ -1,9 +1,5 @@
+import { AUTONOMOUS_GOAL_MARKER, AUTONOMY_PROMPT_MARKER, OPPORTUNITY_MARKER } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
-import {
-  AUTONOMOUS_GOAL_MARKER,
-  AUTONOMY_PROMPT_MARKER,
-  OPPORTUNITY_MARKER,
-} from "@rakazo/core";
 import {
   addScratchpadItemFromTool,
   completeScratchpadItemFromTool,
@@ -173,7 +169,9 @@ describe("scratchpad tools store", () => {
     ).toISOString();
     const prisma = {
       routine: {
-        findMany: vi.fn(async () => [{ prompt: autonomyPrompt({ maxGoalsPerDay: 1, maxChainDepth: 3 }) }]),
+        findMany: vi.fn(async () => [
+          { prompt: autonomyPrompt({ maxGoalsPerDay: 1, maxChainDepth: 3 }) },
+        ]),
       },
       scratchpadItem: {
         findMany: vi.fn(async () => [
@@ -214,7 +212,9 @@ describe("scratchpad tools store", () => {
     const update = vi.fn();
     const prisma = {
       routine: {
-        findMany: vi.fn(async () => [{ prompt: autonomyPrompt({ maxGoalsPerDay: 5, maxChainDepth: 2 }) }]),
+        findMany: vi.fn(async () => [
+          { prompt: autonomyPrompt({ maxGoalsPerDay: 5, maxChainDepth: 2 }) },
+        ]),
       },
       scratchpadItem: {
         findFirst: vi.fn(async () => existing),
@@ -257,7 +257,9 @@ describe("scratchpad tools store", () => {
     );
     const prisma = {
       routine: {
-        findMany: vi.fn(async () => [{ prompt: autonomyPrompt({ maxGoalsPerDay: 3, maxChainDepth: 2 }) }]),
+        findMany: vi.fn(async () => [
+          { prompt: autonomyPrompt({ maxGoalsPerDay: 3, maxChainDepth: 2 }) },
+        ]),
       },
       scratchpadItem: {
         findFirst: vi.fn(async () => existing),

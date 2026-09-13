@@ -223,9 +223,8 @@ export function countAutonomousGoalsForUtcDay(
   items: Array<{ notes: string; createdAt: Date }>,
   now: Date = new Date(),
 ): number {
-  return items.filter((item) =>
-    wasAutonomousGoalCreatedOnUtcDay(item.notes, item.createdAt, now),
-  ).length;
+  return items.filter((item) => wasAutonomousGoalCreatedOnUtcDay(item.notes, item.createdAt, now))
+    .length;
 }
 
 export type AutonomousGoalIntroduction = {

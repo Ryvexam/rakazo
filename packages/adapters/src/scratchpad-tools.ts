@@ -1,5 +1,6 @@
 import {
   AUTONOMOUS_GOAL_MARKER,
+  type AutonomyLimits,
   autonomyLimitError,
   countAutonomousGoalsForUtcDay,
   DEFAULT_AUTONOMY_LIMITS,
@@ -7,7 +8,6 @@ import {
   isAutonomyPrompt,
   isIntroducingAutonomousGoal,
   parseAutonomyLimits,
-  type AutonomyLimits,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 
