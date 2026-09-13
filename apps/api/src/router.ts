@@ -1066,8 +1066,13 @@ export function createRouter(deps: RouterDeps) {
             if (!credential) {
               throw new ORPCError("BAD_REQUEST", { message: "Connect that voice provider first." });
             }
+            // A provider switch must not reuse the previous provider's model id.
             const modelId =
-              input.voiceModelId !== undefined ? input.voiceModelId : existing.voiceModelId;
+              input.voiceModelId !== undefined
+                ? input.voiceModelId
+                : effectiveProvider === existing.voiceProvider
+                  ? existing.voiceModelId
+                  : undefined;
             const validatedModelId = validateVoiceSynthesisModel(
               effectiveProvider,
               modelId ?? undefined,
