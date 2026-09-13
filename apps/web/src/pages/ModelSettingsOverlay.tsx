@@ -422,9 +422,10 @@ export function ModelSettingsOverlay({
               filteredGroups.map((group) => {
                 const connected = credentials.some((entry) => entry.provider === group.id);
                 return (
-                  <button
+                  <Button
                     key={group.id}
                     type="button"
+                    variant="ghost"
                     onClick={() => chooseProvider(group.id)}
                     className={`flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start last:border-0 ${
                       group.id === provider ? "bg-muted" : "hover:bg-accent"
@@ -445,7 +446,7 @@ export function ModelSettingsOverlay({
                         <Trans>Connected</Trans>
                       </span>
                     ) : null}
-                  </button>
+                  </Button>
                 );
               })
             ) : (
@@ -1053,9 +1054,10 @@ function ModelPicker({
 
   return (
     <div ref={rootRef} className="relative mt-2">
-      <button
+      <Button
         ref={triggerRef}
         type="button"
+        variant="outline"
         role="combobox"
         aria-label={t`Model`}
         aria-controls={listboxId}
@@ -1069,10 +1071,10 @@ function ModelPicker({
         <span className="ml-3 shrink-0 text-muted-foreground" aria-hidden="true">
           <ChevronDown size={16} strokeWidth={1.8} />
         </span>
-      </button>
+      </Button>
       {open ? (
         <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
-          <input
+          <Input
             ref={searchRef}
             type="text"
             value={query}
@@ -1088,7 +1090,7 @@ function ModelPicker({
               setHighlightedIndex(0);
             }}
             onKeyDown={onSearchKeyDown}
-            className="w-full border-b border-border bg-transparent px-3 py-2.5 text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/80"
+            className="h-10 rounded-none border-0 border-b border-border px-3 py-2.5 text-[13.5px] shadow-none focus-visible:ring-0"
           />
           <div
             id={listboxId}
@@ -1152,12 +1154,13 @@ function ModelOption({
 }) {
   const { t } = useLingui();
   return (
-    <button
+    <Button
       id={optionDomId}
       ref={(element) => {
         optionRefs.current[index] = element;
       }}
       type="button"
+      variant="ghost"
       role="option"
       aria-selected={option.id === value}
       tabIndex={highlighted ? 0 : -1}
@@ -1171,6 +1174,6 @@ function ModelOption({
       {option.billing.toLowerCase().includes("free") ? (
         <span className="shrink-0 text-[12px] text-muted-foreground">{t`Free`}</span>
       ) : null}
-    </button>
+    </Button>
   );
 }

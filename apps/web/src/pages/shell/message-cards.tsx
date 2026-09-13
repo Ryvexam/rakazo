@@ -75,9 +75,10 @@ export function ChoiceCard({
           {block.options
             .filter((option) => !block.answerId || option.id === block.answerId)
             .map((option) => (
-              <button
+              <Button
                 key={option.id}
                 type="button"
+                variant="ghost"
                 disabled={Boolean(block.answerId) || pending}
                 onClick={() => void choose(option.id)}
                 className={`flex w-full items-start gap-3 rounded-xl px-3.5 py-3.5 text-start text-foreground disabled:opacity-60 ${block.answerId ? "bg-accent" : "bg-muted hover:bg-accent"}`}
@@ -93,7 +94,7 @@ export function ChoiceCard({
                 {block.answerId === option.id ? (
                   <span className="mt-0.5 text-foreground/75">✓</span>
                 ) : null}
-              </button>
+              </Button>
             ))}
         </div>
         {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
@@ -512,13 +513,14 @@ export function ArtifactImage({
   return (
     <div ref={container}>
       {src ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setOpen(true)}
           className="max-w-[240px] overflow-hidden rounded-[20px]"
         >
           <img src={src} alt={name} className="max-h-48 w-full object-cover" />
-        </button>
+        </Button>
       ) : (
         <div className="rounded-[20px] border border-border bg-muted px-4 py-3 text-[14px] text-muted-foreground">
           {name}

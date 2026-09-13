@@ -153,9 +153,10 @@ export function SettingsOverlay({
               const Icon = item.icon;
               const active = item.id === section;
               return (
-                <button
+                <Button
                   key={item.id}
                   type="button"
+                  variant="ghost"
                   data-testid={`settings-nav-${item.id}`}
                   aria-current={active ? "page" : undefined}
                   disabled={panelBusy}
@@ -168,7 +169,7 @@ export function SettingsOverlay({
                 >
                   <Icon className="size-4 shrink-0" strokeWidth={1.75} />
                   <span className="whitespace-nowrap">{item.label}</span>
-                </button>
+                </Button>
               );
             })}
           </nav>

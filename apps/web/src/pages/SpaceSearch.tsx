@@ -1,5 +1,6 @@
 import { Trans } from "@lingui/react/macro";
 import type { SearchHit } from "@ryvoko/contracts";
+import { Button } from "@ryvoko/ui-web";
 
 export function SpaceSearchResults({
   hits,
@@ -27,9 +28,10 @@ export function SpaceSearchResults({
   return (
     <div className="flex flex-col gap-0.5">
       {hits.map((hit) => (
-        <button
+        <Button
           key={`${hit.kind}-${hit.botId ?? hit.groupId}-${hit.messageId ?? hit.artifactId ?? hit.routineId ?? hit.url}`}
           type="button"
+          variant="ghost"
           onClick={() => onSelect(hit)}
           className="rounded-xl px-2.5 py-[11px] text-start hover:bg-background"
         >
@@ -44,7 +46,7 @@ export function SpaceSearchResults({
           <div className="mt-0.5 truncate text-[13px] text-muted-foreground" dir="auto">
             {hit.groupName ?? hit.botName} · {hit.snippet}
           </div>
-        </button>
+        </Button>
       ))}
     </div>
   );

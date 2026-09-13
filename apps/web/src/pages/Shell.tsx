@@ -76,6 +76,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Textarea,
 } from "@ryvoko/ui-web";
 import {
   ArrowDown,
@@ -2504,11 +2505,12 @@ export function ShellPage() {
         <HostComputerPrompt initialMe={bootstrapMe ?? undefined} />
       ) : null}
       {mobileSidebarOpen ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label={t`Close navigation`}
           onClick={() => setMobileSidebarOpen(false)}
-          className="absolute inset-y-0 end-0 start-[min(calc(100%-48px),316px)] z-30 bg-overlay md:hidden"
+          className="absolute inset-y-0 end-0 start-[min(calc(100%-48px),316px)] z-30 rounded-none bg-overlay hover:bg-overlay md:hidden"
         />
       ) : null}
       {!mobileSidebarOpen ? (
@@ -2533,14 +2535,16 @@ export function ShellPage() {
         <div className="app-drag flex items-center justify-between px-[18px] pb-3 pt-4">
           <WindowChrome />
           <div className="relative flex items-center gap-2.5">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               aria-label={t`Activity`}
               aria-pressed={activityMode}
               title={t`Activity`}
               data-activity-mode={activityMode ? "on" : "off"}
               onClick={toggleActivityMode}
-              className={`app-no-drag flex h-7 w-7 items-center justify-center rounded-full ${
+              className={`app-no-drag rounded-full ${
                 activityMode
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground/70 hover:text-foreground/75"
@@ -2552,17 +2556,19 @@ export function ShellPage() {
                 fill={activityMode ? "currentColor" : "none"}
                 aria-hidden="true"
               />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="app-no-drag hidden h-7 w-7 items-center justify-center rounded-full text-muted-foreground/70 hover:text-foreground/75 md:inline-flex"
+              variant="ghost"
+              size="icon-sm"
+              className="app-no-drag hidden rounded-full text-muted-foreground/70 hover:text-foreground/75 md:inline-flex"
               aria-label={t`Minimize bots`}
               title={t`Minimize bots`}
               data-testid="minimize-bots-sidebar"
               onClick={() => setBotsSidebarCollapsedPref(true)}
             >
               <PanelLeftClose size={15} strokeWidth={1.8} aria-hidden="true" />
-            </button>
+            </Button>
             <Popover open={createMenuOpen} onOpenChange={setCreateMenuOpen}>
               <PopoverTrigger
                 className="app-no-drag text-[21px] text-muted-foreground/70 hover:text-foreground/75"
@@ -2657,8 +2663,9 @@ export function ShellPage() {
                   <div key={group.key} data-sidebar-group={group.key}>
                     {group.title ? (
                       <div className="flex items-center pt-2">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
                           className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                           onClick={() => {
                             if (group.emptySpaceId) {
@@ -2706,7 +2713,7 @@ export function ShellPage() {
                               aria-hidden="true"
                             />
                           )}
-                        </button>
+                        </Button>
                         {group.canDeleteSpace ? (
                           <Button
                             variant="ghost"
@@ -2728,9 +2735,10 @@ export function ShellPage() {
                     ) : null}
                     {!collapsed &&
                       group.bots.map((item) => (
-                        <button
+                        <Button
                           key={`${item.kind}:${item.chat.id}`}
                           type="button"
+                          variant="ghost"
                           draggable={item.kind === "bot"}
                           data-roster-bot-id={item.kind === "bot" ? item.chat.id : undefined}
                           aria-keyshortcuts={
@@ -2885,7 +2893,7 @@ export function ShellPage() {
                               </div>
                             )}
                           </div>
-                        </button>
+                        </Button>
                       ))}
                   </div>
                 );
@@ -2894,8 +2902,9 @@ export function ShellPage() {
           )}
           {archivedBots.length + archivedGroups.length > 0 && !showSpaceSearch ? (
             <div className="mt-2 border-t border-border pt-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 aria-expanded={archivedOpen}
                 onClick={() => setArchivedOpen((open) => !open)}
                 className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13.5px] text-muted-foreground hover:bg-sidebar-accent"
@@ -2904,7 +2913,7 @@ export function ShellPage() {
                   <Trans>Archived</Trans>
                 </span>
                 <span>{archivedBots.length + archivedGroups.length}</span>
-              </button>
+              </Button>
               {archivedOpen ? (
                 <>
                   {archivedBots.map((bot) => (
@@ -2977,8 +2986,9 @@ export function ShellPage() {
             </div>
           ) : null}
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setPluginsOpen(true)}
           className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-sidebar-accent"
         >
@@ -2988,7 +2998,7 @@ export function ShellPage() {
           <span className="text-[14.5px] text-foreground/90">
             <Trans>Integrations</Trans>
           </span>
-        </button>
+        </Button>
         <Popover open={menuOpen} onOpenChange={setMenuOpen}>
           <PopoverTrigger
             data-testid="user-menu-trigger"
@@ -3051,8 +3061,9 @@ export function ShellPage() {
         </Popover>
       </aside>
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
         data-testid="bots-sidebar-edge"
         aria-label={botsSidebarCollapsed ? t`Show bots` : t`Hide bots`}
         aria-pressed={!botsSidebarCollapsed}
@@ -3103,17 +3114,21 @@ export function ShellPage() {
           <div className="flex min-w-0 items-center gap-2">
             {/* Collapsed bots sidebar: this header is the leading edge for window chrome. */}
             {botsSidebarCollapsed && desktopBridge() ? <WindowChrome /> : null}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               aria-label={t`Open navigation`}
               onClick={() => setMobileSidebarOpen(true)}
               className="app-no-drag grid h-8 w-8 shrink-0 place-items-center rounded-lg text-foreground/75 hover:bg-accent md:hidden"
             >
               <Menu size={19} strokeWidth={1.7} />
-            </button>
+            </Button>
             {botsSidebarCollapsed ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 data-testid="restore-bots-sidebar"
                 aria-label={t`Show bots`}
                 title={t`Show bots`}
@@ -3121,10 +3136,11 @@ export function ShellPage() {
                 className="app-no-drag hidden h-8 w-8 shrink-0 place-items-center rounded-lg text-foreground/75 hover:bg-accent md:grid"
               >
                 <PanelLeftOpen size={19} strokeWidth={1.7} aria-hidden="true" />
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
               type="button"
+              variant="ghost"
               data-testid="bot-settings-trigger"
               onClick={() => setPanel(inGroup ? "group-settings" : "settings")}
               className="app-no-drag flex min-w-0 items-center gap-3"
@@ -3149,12 +3165,14 @@ export function ShellPage() {
                     : (active?.name ?? t`Select a bot`)}
                 </span>
               </span>
-            </button>
+            </Button>
           </div>
           <div className="flex items-center gap-1">
             {!inGroup && active ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-lg"
                 title={t`Agent computer`}
                 onClick={() => {
                   const next = panel === "computer" ? null : "computer";
@@ -3168,7 +3186,7 @@ export function ShellPage() {
                 className="app-no-drag grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
               >
                 <Monitor size={18} strokeWidth={1.6} className="text-foreground/75" />
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -3385,8 +3403,9 @@ export function ShellPage() {
                     </div>
                   )}
                   {!computerScreenError ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       data-testid="computer-preview-open"
                       className="absolute inset-0 flex cursor-pointer items-center justify-center bg-overlay/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label={t`Open`}
@@ -3396,7 +3415,7 @@ export function ShellPage() {
                         <Maximize2 size={15} strokeWidth={1.9} aria-hidden />
                         <Trans>Open</Trans>
                       </span>
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
                 <p className="mt-2 truncate text-[13.5px] text-muted-foreground" dir="auto">
@@ -3774,8 +3793,10 @@ export function ShellPage() {
             {/* Invisible anchor at the pointer position, mirroring the bot menu. */}
             <DropdownMenuTrigger
               render={
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   tabIndex={-1}
                   aria-hidden
                   className="fixed size-0 p-0 opacity-0"
@@ -4361,14 +4382,15 @@ const Transcript = memo(function Transcript({
         className="rk-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
       >
         {olderCursor != null ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             disabled={loadingOlder}
             onClick={() => void loadOlder()}
             className="self-center rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground/75 disabled:opacity-50"
           >
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
-          </button>
+          </Button>
         ) : null}
         {reactionView.visibleMessages.map((message) => {
           if (!message.blocks.some((block) => !isToolActivityBlock(block))) return null;
@@ -4488,9 +4510,11 @@ const Transcript = memo(function Transcript({
           <ActiveBotGlyph bots={workingBots} label={workingLabel} />
         ) : null}
       </div>
-      <button
+      <Button
         ref={jumpButtonRef}
         type="button"
+        variant="ghost"
+        size="icon-lg"
         aria-label={t`Jump to latest`}
         aria-hidden={atEnd}
         tabIndex={atEnd ? -1 : 0}
@@ -4500,7 +4524,7 @@ const Transcript = memo(function Transcript({
         }`}
       >
         <ArrowDown size={17} strokeWidth={1.8} />
-      </button>
+      </Button>
     </div>
   );
 });
@@ -4829,8 +4853,10 @@ const Composer = memo(function Composer({
           className="mb-3 flex items-center gap-2 rounded-[14px] border border-destructive/40 bg-destructive/10 px-4 py-2 text-[13px] text-destructive"
         >
           <span className="min-w-0 flex-1">{sendError ?? runError}</span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             aria-label={t`Dismiss error`}
             data-testid="composer-error-dismiss"
             onClick={() => {
@@ -4840,7 +4866,7 @@ const Composer = memo(function Composer({
             className="shrink-0 text-destructive hover:text-foreground"
           >
             <X size={13} strokeWidth={2} />
-          </button>
+          </Button>
         </div>
       ) : null}
       {replyTarget ? (
@@ -4849,14 +4875,16 @@ const Composer = memo(function Composer({
           className="mb-2 flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-[13px] text-foreground/75"
         >
           <span className="min-w-0 flex-1 truncate text-muted-foreground">{t`Replying to ${replyName}`}</span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             aria-label={t`Cancel reply`}
             onClick={onClearReply}
             className="shrink-0 text-muted-foreground hover:text-foreground"
           >
             <X size={13} strokeWidth={2} />
-          </button>
+          </Button>
         </div>
       ) : null}
       {attachmentNotice ? (
@@ -4883,14 +4911,16 @@ const Composer = memo(function Composer({
               <span className="max-w-[180px] truncate" dir="auto">
                 {attachment.file.name}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 aria-label={t`Remove ${attachment.file.name}`}
                 onClick={() => onRemoveAttachment(attachment)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X size={13} strokeWidth={2} />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
@@ -4907,10 +4937,11 @@ const Composer = memo(function Composer({
             const optionId = `${mentionListboxId}-option-${index}`;
             const highlighted = index === activeMentionIndex;
             return (
-              <button
+              <Button
                 id={optionId}
                 key={mentionChipKey(mention)}
                 type="button"
+                variant="ghost"
                 role="option"
                 aria-selected={highlighted}
                 aria-label={t`@${mention.name}`}
@@ -4932,7 +4963,7 @@ const Composer = memo(function Composer({
                     </span>
                   ) : null}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -4943,9 +4974,10 @@ const Composer = memo(function Composer({
           className="mb-2 overflow-hidden rounded-[14px] border border-border bg-muted"
         >
           {slashSkillOptions.map((skill) => (
-            <button
+            <Button
               key={skill.id}
               type="button"
+              variant="ghost"
               aria-label={t`Skill ${skill.name}`}
               onClick={() => insertSkill(skill)}
               className="flex w-full items-start gap-3 px-4 py-2.5 text-start hover:bg-accent"
@@ -4959,21 +4991,22 @@ const Composer = memo(function Composer({
                   {truncateSlashDescription(skill.description)}
                 </span>
               </span>
-            </button>
+            </Button>
           ))}
           {slashActionOptions.map((action) => {
             const label = slashActionLabel(action.id);
             return (
-              <button
+              <Button
                 key={action.id}
                 type="button"
+                variant="ghost"
                 aria-label={label}
                 onClick={() => runSlashAction(action.id)}
                 className="flex w-full items-center gap-3 px-4 py-2.5 text-start hover:bg-accent"
               >
                 <Settings size={16} strokeWidth={1.7} className="shrink-0 text-muted-foreground" />
                 <span className="text-[14px] text-foreground">{label}</span>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -5010,14 +5043,16 @@ const Composer = memo(function Composer({
               <span dir="auto" className="truncate">
                 {selectedSkill.name}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 aria-label={t`Remove skill ${selectedSkill.name}`}
                 onClick={() => setSelectedSkill(null)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X size={12} strokeWidth={2} />
-              </button>
+              </Button>
             </span>
           ) : null}
           {selectedMentions.map((mention) => (
@@ -5031,8 +5066,10 @@ const Composer = memo(function Composer({
               <span dir="auto" className="truncate">
                 {mention.name}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 aria-label={t`Remove mention ${mention.name}`}
                 onClick={() =>
                   setSelectedMentions((current) =>
@@ -5044,10 +5081,10 @@ const Composer = memo(function Composer({
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X size={12} strokeWidth={2} />
-              </button>
+              </Button>
             </span>
           ))}
-          <textarea
+          <Textarea
             ref={textareaRef}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
@@ -5111,7 +5148,7 @@ const Composer = memo(function Composer({
             autoComplete="off"
             dir="auto"
             rows={1}
-            className="max-h-32 min-h-[24px] min-w-[8rem] flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-[15.5px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-40"
+            className="max-h-32 min-h-[24px] min-w-[8rem] flex-1 resize-none overflow-y-auto border-0 bg-transparent py-0.5 text-[15.5px] leading-6 shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0 disabled:opacity-40"
           />
         </div>
         {onVoice ? (
@@ -5283,9 +5320,11 @@ function MessageHoverActions({
               aria-label={t`Reactions`}
             >
               {MESSAGE_REACTIONS.map((emoji) => (
-                <button
+                <Button
                   key={emoji}
                   type="button"
+                  variant="ghost"
+                  size="icon-lg"
                   aria-label={emoji}
                   className="grid h-11 w-11 place-items-center rounded-xl text-2xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
                   onClick={() => {
@@ -5294,19 +5333,20 @@ function MessageHoverActions({
                   }}
                 >
                   {emoji}
-                </button>
+                </Button>
               ))}
             </PopoverContent>
           </Popover>
         ) : null}
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label={t`Reply`}
           onClick={() => onReply(message)}
           className={`${iconButtonClass} hidden [@media(hover:hover)_and_(pointer:fine)]:grid`}
         >
           <Reply size={15} strokeWidth={1.7} />
-        </button>
+        </Button>
         <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
           <DropdownMenuTrigger
             aria-label={t`More`}
@@ -5445,8 +5485,9 @@ const MessageView = memo(function MessageView({
         </div>
       ) : null}
       {parentJumpId ? (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           data-testid="reply-parent-preview"
           aria-label={t`Jump to replied message`}
           onClick={() => onJumpToMessage?.(parentJumpId)}
@@ -5454,7 +5495,7 @@ const MessageView = memo(function MessageView({
           dir="auto"
         >
           {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
-        </button>
+        </Button>
       ) : null}
     </>
   );
@@ -5480,14 +5521,15 @@ const MessageView = memo(function MessageView({
               return null;
             })}
             {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
                 onClick={onSpeak}
                 className="text-[12px] text-muted-foreground hover:text-foreground"
               >
                 {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -5608,9 +5650,10 @@ const MessageView = memo(function MessageView({
         if (block.kind === "child_bot") {
           const removed = block.status === "deleted" || block.status === "archived";
           return (
-            <button
+            <Button
               key={i}
               type="button"
+              variant="ghost"
               disabled={removed}
               onClick={() => onOpenBot(block.botId)}
               className="w-[min(340px,90%)] rounded-[18px] border border-border bg-muted px-[18px] py-4 text-start disabled:opacity-60"
@@ -5640,7 +5683,7 @@ const MessageView = memo(function MessageView({
                     : t`Removed with chat, computer, and memory.`
                   : block.title || t`Opened its thread.`}
               </div>
-            </button>
+            </Button>
           );
         }
         if (block.kind === "choice") {
@@ -5731,14 +5774,15 @@ const MessageView = memo(function MessageView({
               >
                 <ChatMarkdown>{block.text}</ChatMarkdown>
                 {voiceReady ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
                     onClick={onSpeak}
                     className="mt-2 text-[12px] text-muted-foreground hover:text-foreground"
                   >
                     {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>

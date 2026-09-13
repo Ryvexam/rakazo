@@ -2,12 +2,14 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { Bot } from "@ryvoko/contracts";
 import {
   BotAvatar,
+  Button,
   Command,
   CommandEmpty,
   CommandGroup,
   CommandItem,
   CommandList,
   CommandSeparator,
+  Input,
 } from "@ryvoko/ui-web";
 import { Info, Lock, Plus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -45,16 +47,20 @@ export function BotCreatePicker({
 
   return (
     <div data-testid="bot-create-picker" className="w-[min(320px,calc(100vw-2rem))]">
-      <label className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <label
+        htmlFor="bot-create-picker-search"
+        className="flex items-center gap-2 border-b border-border px-3 py-2"
+      >
         <span className="shrink-0 text-[13px] text-muted-foreground">
           <Trans>To:</Trans>
         </span>
-        <input
+        <Input
+          id="bot-create-picker-search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t`Search`}
           aria-label={t`Search`}
-          className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground"
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-[14px] shadow-none focus-visible:ring-0"
         />
       </label>
       <Command shouldFilter={false} className="rounded-none border-0 bg-transparent p-0">
@@ -99,8 +105,10 @@ export function BotCreatePicker({
               <span className="min-w-0 flex-1 truncate">
                 <Trans>Create new Group</Trans>
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 data-testid="picker-info-group"
                 aria-label={t`About groups`}
                 title={t`About groups`}
@@ -112,10 +120,10 @@ export function BotCreatePicker({
                   onShowGroupInfo();
                 }}
                 onKeyDown={(event) => event.stopPropagation()}
-                className="-mr-2 shrink-0 rounded p-1 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-focus-within/command-item:opacity-100 group-hover/command-item:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+                className="-mr-2 shrink-0 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-focus-within/command-item:opacity-100 group-hover/command-item:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <Info size={14} strokeWidth={1.8} aria-hidden="true" />
-              </button>
+              </Button>
             </CommandItem>
             <CommandItem
               value="create-space"
@@ -127,8 +135,10 @@ export function BotCreatePicker({
               <span className="min-w-0 flex-1 truncate">
                 <Trans>Create new Space</Trans>
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-xs"
                 data-testid="picker-info-space"
                 aria-label={t`About spaces`}
                 title={t`About spaces`}
@@ -140,10 +150,10 @@ export function BotCreatePicker({
                   onShowSpaceInfo();
                 }}
                 onKeyDown={(event) => event.stopPropagation()}
-                className="-mr-2 shrink-0 rounded p-1 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-focus-within/command-item:opacity-100 group-hover/command-item:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
+                className="-mr-2 shrink-0 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-focus-within/command-item:opacity-100 group-hover/command-item:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <Info size={14} strokeWidth={1.8} aria-hidden="true" />
-              </button>
+              </Button>
             </CommandItem>
           </CommandGroup>
         </CommandList>

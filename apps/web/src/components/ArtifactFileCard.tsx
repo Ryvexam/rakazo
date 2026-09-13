@@ -40,8 +40,9 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   if (!markdown) {
     return (
       <div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => void startDownload()}
           className="rounded-2xl border border-border bg-card px-4 py-3 text-left text-[14px] text-foreground hover:bg-accent"
         >
@@ -49,7 +50,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
           <div className="mt-1 text-muted-foreground">
             {props.mimeType} · {formatBytes(props.size)}
           </div>
-        </button>
+        </Button>
         {downloadError ? <DownloadError message={downloadError} /> : null}
       </div>
     );
@@ -59,9 +60,10 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
     <>
       <div>
         <div className="flex min-w-[280px] overflow-hidden rounded-2xl border border-border bg-card text-left text-foreground">
-          <button
+          <Button
             ref={previewButton}
             type="button"
+            variant="ghost"
             aria-label={t`Preview ${props.name}`}
             onClick={() => setPreviewOpen(true)}
             className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-accent"
@@ -75,16 +77,18 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
                 {formatBytes(props.size)}
               </span>
             </span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-lg"
             aria-label={t`Download ${props.name}`}
             title={t`Download ${props.name}`}
             onClick={() => void startDownload()}
             className="grid w-14 shrink-0 place-items-center border-l border-border text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Download size={19} strokeWidth={1.8} />
-          </button>
+          </Button>
         </div>
         {downloadError ? <DownloadError message={downloadError} /> : null}
       </div>

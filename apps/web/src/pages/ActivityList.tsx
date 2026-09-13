@@ -2,6 +2,7 @@ import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { RunActivityRow } from "@ryvoko/contracts";
+import { Button } from "@ryvoko/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
 
@@ -97,8 +98,9 @@ function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void 
   const activityLabel = t`${title}, ${label}`;
   const tone = statusTone(run.status);
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       aria-label={activityLabel}
       onClick={onOpen}
       className="flex w-full gap-3 rounded-xl px-2.5 py-[9px] text-left hover:bg-accent"
@@ -123,7 +125,7 @@ function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void 
           <span className={`ms-auto shrink-0 text-xs ${tone}`}>{label}</span>
         </div>
       </div>
-    </button>
+    </Button>
   );
 }
 

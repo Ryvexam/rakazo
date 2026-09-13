@@ -139,9 +139,10 @@ export function IntegrationSetup({
           {choices
             .filter(({ id }) => !managedOnly || id === "composio" || id === "pipedream")
             .map(({ id, label }) => (
-              <button
+              <Button
                 key={id}
                 type="button"
+                variant="ghost"
                 aria-pressed={choice === id}
                 disabled={busy}
                 onClick={() => {
@@ -153,7 +154,7 @@ export function IntegrationSetup({
               >
                 <span>{label}</span>
                 {choice === id ? <Check className="size-4" aria-hidden /> : null}
-              </button>
+              </Button>
             ))}
         </fieldset>
       ) : null}

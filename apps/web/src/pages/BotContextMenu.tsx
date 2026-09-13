@@ -1,6 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Bot, BotSection } from "@ryvoko/contracts";
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -69,8 +70,10 @@ export function BotContextMenu({
       {/* Invisible anchor at the pointer position; the menu itself carries the accessible name. */}
       <DropdownMenuTrigger
         render={
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             tabIndex={-1}
             aria-hidden
             className="fixed size-0 p-0 opacity-0"

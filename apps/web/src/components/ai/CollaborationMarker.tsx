@@ -1,4 +1,4 @@
-import { BotAvatar, GroupAvatar, type GroupAvatarMember } from "@ryvoko/ui-web";
+import { BotAvatar, Button, GroupAvatar, type GroupAvatarMember } from "@ryvoko/ui-web";
 import { LoadingState } from "./primitives";
 
 /** Lightweight peer event shown without exposing the exchanged message body. */
@@ -17,8 +17,9 @@ export function CollaborationMarker({
 }) {
   return (
     <div className="flex justify-start">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         data-testid="peer-receipt-chip"
         aria-label={ariaLabel}
         onClick={onClick}
@@ -28,7 +29,7 @@ export function CollaborationMarker({
         <span dir="auto" className="truncate">
           {label}
         </span>
-      </button>
+      </Button>
     </div>
   );
 }

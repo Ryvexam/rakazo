@@ -44,9 +44,10 @@ function MemberPicker({
       {selectable.map((bot) => {
         const checked = selected.includes(bot.id);
         return (
-          <button
+          <Button
             key={bot.id}
             type="button"
+            variant="ghost"
             aria-pressed={checked}
             onClick={() => toggle(bot.id)}
             className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-start ${
@@ -58,7 +59,7 @@ function MemberPicker({
               {bot.name}
             </span>
             {checked ? <Check size={14} className="text-muted-foreground" aria-hidden /> : null}
-          </button>
+          </Button>
         );
       })}
     </div>

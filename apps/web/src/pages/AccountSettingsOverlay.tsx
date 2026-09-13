@@ -486,16 +486,17 @@ function UiLocalePicker({
 
   return (
     <div ref={rootRef} className="relative mt-3">
-      <button
+      <Button
         ref={triggerRef}
         type="button"
+        variant="outline"
         role="combobox"
         data-testid="ui-locale-select"
         aria-label={t`Language`}
         aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="flex h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 text-start text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+        className="h-9 w-full justify-between px-3 text-start font-normal"
         onClick={() => setOpen((current) => !current)}
         onKeyDown={onTriggerKeyDown}
       >
@@ -503,7 +504,7 @@ function UiLocalePicker({
         <span className="ml-3 shrink-0 text-muted-foreground" aria-hidden="true">
           <ChevronDown size={16} strokeWidth={1.8} />
         </span>
-      </button>
+      </Button>
       {open ? (
         <div
           id={listboxId}
@@ -512,12 +513,13 @@ function UiLocalePicker({
           className="rk-scroll absolute left-0 right-0 top-full z-20 mt-1 overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
         >
           {UI_LOCALES.map((code, index) => (
-            <button
+            <Button
               key={code}
               ref={(element) => {
                 optionRefs.current[index] = element;
               }}
               type="button"
+              variant="ghost"
               role="option"
               aria-selected={code === value}
               tabIndex={index === highlightedIndex ? 0 : -1}
@@ -528,7 +530,7 @@ function UiLocalePicker({
               onKeyDown={(event) => onOptionKeyDown(event, index)}
             >
               {UI_LOCALE_LABELS[code]}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}

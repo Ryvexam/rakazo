@@ -502,14 +502,15 @@ export function PluginsOverlay({
         className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2"
       >
         {connected ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-start hover:bg-accent/60"
             onClick={() => openDetail(item)}
           >
             {icon}
             {title}
-          </button>
+          </Button>
         ) : (
           <>
             {icon}
@@ -618,8 +619,9 @@ export function PluginsOverlay({
         </Card>
 
         <Card data-testid="connection-tools">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
             onClick={() => setToolsOpen((open) => !open)}
             aria-expanded={toolsOpen}
@@ -636,7 +638,7 @@ export function PluginsOverlay({
             ) : (
               <ChevronDown className="size-4 text-muted-foreground" />
             )}
-          </button>
+          </Button>
           {toolsOpen ? (
             <CardContent className="border-t border-border pt-3">
               {toolsLoading ? (

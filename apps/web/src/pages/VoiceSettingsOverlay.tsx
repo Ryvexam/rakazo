@@ -346,9 +346,10 @@ export function VoiceSettingsOverlay({
             {catalog.map((entry) => {
               const connected = credentials.some((cred) => cred.provider === entry.id);
               return (
-                <button
+                <Button
                   key={entry.id}
                   type="button"
+                  variant="ghost"
                   onClick={() => {
                     setProvider(entry.id);
                     setApiKey("");
@@ -377,7 +378,7 @@ export function VoiceSettingsOverlay({
                       <Trans>Connected</Trans>
                     </span>
                   ) : null}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -515,8 +516,9 @@ export function VoiceSettingsOverlay({
                         const isFavorite = favorites.some((item) => item.id === voice.id);
                         return (
                           <div key={voice.id} className="flex items-center gap-2 px-3.5 py-3">
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
                               className="min-w-0 flex-1 text-start"
                               onClick={() => void chooseVoice(voice.id)}
                             >
@@ -526,7 +528,7 @@ export function VoiceSettingsOverlay({
                               <span className="block truncate text-[12px] text-muted-foreground">
                                 {voice.description || voice.label}
                               </span>
-                            </button>
+                            </Button>
                             <Button
                               type="button"
                               size="icon-sm"

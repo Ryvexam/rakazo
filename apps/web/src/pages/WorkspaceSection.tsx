@@ -132,9 +132,10 @@ export function WorkspaceSection({ botId }: { botId: string }) {
         ) : (
           <div className="space-y-0.5">
             {entries.map((entry) => (
-              <button
+              <Button
                 key={entry.path}
                 type="button"
+                variant="ghost"
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-accent"
                 onClick={() =>
                   entry.kind === "dir" ? void loadDirectory(entry.path) : void openFile(entry.path)
@@ -145,7 +146,7 @@ export function WorkspaceSection({ botId }: { botId: string }) {
                 {entry.kind === "file" ? (
                   <span className="text-[11px] text-muted-foreground/70">{entry.size} B</span>
                 ) : null}
-              </button>
+              </Button>
             ))}
           </div>
         )}
