@@ -1,14 +1,9 @@
-import {
-  type Actor,
-  BOT_COLORS,
-  type Bot,
-  type BotSection,
-  type MessageBlock,
-  type SpaceBot,
-} from "@rakazo/contracts";
+import type { Actor, Bot, BotSection, MessageBlock, SpaceBot } from "@rakazo/contracts";
+import { BOT_COLORS } from "@rakazo/contracts";
 import { userVisibleMessages } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
-import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
+import type { ComputerMode } from "./computers.js";
+import { ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
 import { IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
