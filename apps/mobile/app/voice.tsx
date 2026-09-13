@@ -90,8 +90,13 @@ export default function VoiceSettings() {
     setVoiceId(cred?.voiceId ?? "");
     setModelId(cred?.modelId || catalogEntry?.defaultSynthesisModelId || "");
     if (cred) {
-      const listed = await rpc<VoiceInfo[]>("voice/voices", { provider: selected });
-      setVoices(listed);
+      const listed = await searchVoiceLibrary(selected, "");
+      const activeVoice = cred.voiceId ?? "";
+      const withConfigured =
+        activeVoice && !listed.some((voice) => voice.id === activeVoice)
+          ? [{ id: activeVoice, label: t("Unavailable voice") }, ...listed]
+          : listed;
+      setVoices(withConfigured);
       setVoiceResults(listed);
       setFavorites(await loadFavoriteVoices(selected));
     } else {
@@ -99,7 +104,7 @@ export default function VoiceSettings() {
       setVoiceResults([]);
       setFavorites([]);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -663,25 +668,13 @@ function createVoiceStyles() {
 }
 
 async function searchVoiceLibrary(provider: string, query: string): Promise<VoiceLibraryItem[]> {
-  try {
-    const result = await rpc<{ items: VoiceLibraryItem[] }>("voice/search", {
-      provider,
-      query: query.trim() || undefined,
-      page: 1,
-      pageSize: 50,
-    });
-    return result.items;
-  } catch {
-    const response = await rpc<VoiceInfo[]>("voice/voices", { provider });
-    const normalized = query.trim().toLocaleLowerCase();
-    return response.filter(
-      (voice) =>
-        !normalized ||
-        [voice.id, voice.label, voice.description]
-          .filter(Boolean)
-          .some((value) => value?.toLocaleLowerCase().includes(normalized)),
-    );
-  }
+  const result = await rpc<{ items: VoiceLibraryItem[] }>("voice/search", {
+    provider,
+    query: query.trim() || undefined,
+    page: 1,
+    pageSize: 50,
+  });
+  return result.items;
 }
 
 async function loadFavoriteVoices(provider: string): Promise<VoiceLibraryItem[]> {
