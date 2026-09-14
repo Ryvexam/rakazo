@@ -136,7 +136,7 @@ export function WorkspaceSection({ botId }: { botId: string }) {
                 key={entry.path}
                 type="button"
                 variant="ghost"
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-accent"
+                className="h-auto w-full items-center justify-start gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-accent"
                 onClick={() =>
                   entry.kind === "dir" ? void loadDirectory(entry.path) : void openFile(entry.path)
                 }

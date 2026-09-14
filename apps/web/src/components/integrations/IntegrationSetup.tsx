@@ -150,7 +150,7 @@ export function IntegrationSetup({
                   setApiKey("");
                   setError(null);
                 }}
-                className={`flex min-h-11 w-full items-center justify-between border-b border-border px-3.5 py-2.5 text-left last:border-0 ${choice === id ? "bg-muted" : "hover:bg-accent"}`}
+                className={`h-auto min-h-11 w-full items-center justify-between border-b border-border px-3.5 py-2.5 text-left last:border-0 ${choice === id ? "bg-muted" : "hover:bg-accent"}`}
               >
                 <span>{label}</span>
                 {choice === id ? <Check className="size-4" aria-hidden /> : null}

@@ -33,7 +33,7 @@ export function SpaceSearchResults({
           type="button"
           variant="ghost"
           onClick={() => onSelect(hit)}
-          className="rounded-xl px-2.5 py-[11px] text-start hover:bg-background"
+          className="h-auto w-full justify-start rounded-xl px-2.5 py-[11px] text-start hover:bg-background"
         >
           <div className="flex items-baseline justify-between gap-2">
             <span className="truncate text-[15px] font-medium text-foreground" dir="auto">

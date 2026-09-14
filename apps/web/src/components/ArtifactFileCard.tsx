@@ -44,7 +44,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
           type="button"
           variant="ghost"
           onClick={() => void startDownload()}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-left text-[14px] text-foreground hover:bg-accent"
+          className="h-auto justify-start rounded-2xl border border-border bg-card px-4 py-3 text-left text-[14px] text-foreground hover:bg-accent"
         >
           <div className="font-medium">{props.name}</div>
           <div className="mt-1 text-muted-foreground">
@@ -66,7 +66,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
             variant="ghost"
             aria-label={t`Preview ${props.name}`}
             onClick={() => setPreviewOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-accent"
+            className="h-auto min-w-0 flex-1 items-center justify-start gap-3 px-4 py-3 text-left hover:bg-accent"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground">
               <FileText size={21} strokeWidth={1.8} />

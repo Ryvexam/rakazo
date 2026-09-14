@@ -427,7 +427,7 @@ export function ModelSettingsOverlay({
                     type="button"
                     variant="ghost"
                     onClick={() => chooseProvider(group.id)}
-                    className={`flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start last:border-0 ${
+                    className={`h-auto w-full items-center justify-start gap-3 border-b border-border px-3.5 py-3 text-start last:border-0 ${
                       group.id === provider ? "bg-muted" : "hover:bg-accent"
                     }`}
                   >
@@ -1164,7 +1164,7 @@ function ModelOption({
       role="option"
       aria-selected={option.id === value}
       tabIndex={highlighted ? 0 : -1}
-      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-start text-[13.5px] text-foreground outline-none hover:bg-accent focus-visible:bg-accent ${
+      className={`h-auto w-full items-center justify-between gap-3 px-3 py-2 text-start text-[13.5px] text-foreground outline-none hover:bg-accent focus-visible:bg-accent ${
         highlighted || option.id === value ? "bg-accent" : ""
       }`}
       onClick={() => choose(index)}

@@ -103,7 +103,7 @@ function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void 
       variant="ghost"
       aria-label={activityLabel}
       onClick={onOpen}
-      className="flex w-full gap-3 rounded-xl px-2.5 py-[9px] text-left hover:bg-accent"
+      className="h-auto min-h-[52px] w-full justify-start gap-3 rounded-xl px-2.5 py-[9px] text-left hover:bg-accent"
     >
       <span
         className={`mt-1.5 size-2 shrink-0 rounded-full bg-current ${tone}`}

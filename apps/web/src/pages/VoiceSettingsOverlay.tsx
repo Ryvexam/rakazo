@@ -359,7 +359,7 @@ export function VoiceSettingsOverlay({
                     setNotice(null);
                     void refresh(entry.id);
                   }}
-                  className={`flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start transition-colors last:border-0 ${
+                  className={`h-auto w-full items-center justify-start gap-3 border-b border-border px-3.5 py-3 text-start transition-colors last:border-0 ${
                     entry.id === provider ? "bg-muted" : "hover:bg-accent"
                   }`}
                 >

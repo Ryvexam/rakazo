@@ -50,7 +50,7 @@ function MemberPicker({
             variant="ghost"
             aria-pressed={checked}
             onClick={() => toggle(bot.id)}
-            className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-start ${
+            className={`h-auto w-full items-center justify-start gap-3 rounded-xl px-2.5 py-2.5 text-start ${
               checked ? "bg-muted" : "hover:bg-accent"
             }`}
           >

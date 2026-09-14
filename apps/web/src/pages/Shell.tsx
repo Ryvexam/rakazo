@@ -2666,7 +2666,7 @@ export function ShellPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                          className="h-auto min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                           onClick={() => {
                             if (group.emptySpaceId) {
                               openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -2798,7 +2798,7 @@ export function ShellPage() {
                               position: { x: event.clientX, y: event.clientY },
                             });
                           }}
-                          className={`flex w-full gap-3 rounded-xl px-2.5 py-[11px] text-start ${
+                          className={`h-auto min-h-[60px] w-full items-center justify-start gap-3 rounded-xl px-2.5 py-[11px] text-start ${
                             item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""
                           } ${
                             (item.kind === "bot" && !inGroup && active?.id === item.chat.id) ||
